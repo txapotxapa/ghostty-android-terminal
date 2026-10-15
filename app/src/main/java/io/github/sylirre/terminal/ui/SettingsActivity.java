@@ -384,6 +384,13 @@ public final class SettingsActivity extends Activity {
                     .enabledWhen(() -> VmImages.isInstalled(this)));
             sections.add(new SettingsSection(getString(R.string.settings_section_vm), vm));
         }
+        List<Setting> about = new ArrayList<>();
+        about.add(new Setting.Action(
+                getString(R.string.setting_check_updates_title),
+                getString(R.string.setting_check_updates_summary),
+                () -> AppUpdater.installedVersionName(this),
+                () -> AppUpdater.checkNow(this)));
+        sections.add(new SettingsSection(getString(R.string.settings_group_updates), about));
         return sections;
     }
 

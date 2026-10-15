@@ -104,13 +104,92 @@ final class AppUpdater {
         }, "app-update").start();
     }
 
-    private static void checkAndDownload(Context app, String repo, long installed)
+    /**
+     * Settings → "Check for updates": check right now (ignoring the interval),
+     * download with a progress dialog, then offer to install. Installing
+     * restarts the app, so the user confirms first.
+     */
+    static void checkNow(Activity activity) {
+        Context app = activity.getApplicationContext();
+        String repo = app.getString(R.string.update_repo);
+        if (repo.isEmpty()) return;
+        if ((app.getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            Toast.makeText(app, R.string.update_debug_build, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (busy) {
+            Toast.makeText(app, R.string.update_checking, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        long installed = installedVersionCode(app);
+        AlertDialog progress = new AlertDialog.Builder(activity)
+                .setMessage(R.string.update_checking)
+                .setCancelable(false)
+                .show();
+        busy = true;
+        prefs(app).edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply();
+        Handler main = new Handler(Looper.getMainLooper());
+        new Thread(() -> {
+            long found;
+            String error = null;
+            try {
+                SharedPreferences prefs = prefs(app);
+                long ready = prefs.getLong(KEY_READY_CODE, 0);
+                found = ready > installed && apkFile(app).isFile()
+                        ? ready
+                        : checkAndDownload(app, repo, installed,
+                                () -> main.post(() -> progress.setMessage(
+                                        app.getString(R.string.update_downloading))));
+            } catch (Exception e) {
+                Log.w(TAG, "update check failed: " + e);
+                found = 0;
+                error = String.valueOf(e.getMessage());
+            } finally {
+                busy = false;
+            }
+            long code = found;
+            String err = error;
+            main.post(() -> {
+                progress.dismiss();
+                if (activity.isFinishing() || activity.isDestroyed()) return;
+                if (err != null) {
+                    Toast.makeText(app, app.getString(R.string.update_check_failed, err),
+                            Toast.LENGTH_LONG).show();
+                } else if (code > installed) {
+                    offeredCode = 0;
+                    offerInstall(activity, code, prefs(app).getString(KEY_READY_NAME, ""));
+                } else {
+                    Toast.makeText(app, app.getString(R.string.update_up_to_date,
+                            installedVersionName(app)), Toast.LENGTH_LONG).show();
+                }
+            });
+        }, "app-update-now").start();
+    }
+
+    /** Installed versionName, for the settings row. */
+    static String installedVersionName(Context app) {
+        try {
+            return app.getPackageManager().getPackageInfo(app.getPackageName(), 0)
+                    .versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            return "?";
+        }
+    }
+
+    private static long checkAndDownload(Context app, String repo, long installed)
             throws Exception {
+        return checkAndDownload(app, repo, installed, null);
+    }
+
+    /** Returns the downloaded versionCode, or 0 when there is nothing newer. */
+    private static long checkAndDownload(Context app, String repo, long installed,
+            Runnable onDownloadStart) throws Exception {
         JSONObject rel = new JSONObject(new String(
                 get("https://api.github.com/repos/" + repo + "/releases/latest"),
                 StandardCharsets.UTF_8));
         long code = versionCodeOf(rel.optString("tag_name", ""));
-        if (code <= installed) return;
+        if (code <= installed) return 0;
         String apkUrl = null;
         JSONArray assets = rel.optJSONArray("assets");
         for (int i = 0; assets != null && i < assets.length(); i++) {
@@ -120,7 +199,8 @@ final class AppUpdater {
                 break;
             }
         }
-        if (apkUrl == null) return;
+        if (apkUrl == null) return 0;
+        if (onDownloadStart != null) onDownloadStart.run();
 
         File apk = apkFile(app);
         File tmp = new File(apk.getPath() + ".part");
@@ -132,7 +212,7 @@ final class AppUpdater {
         if (info == null || !app.getPackageName().equals(info.packageName)
                 || info.getLongVersionCode() <= installed) {
             tmp.delete();
-            return;
+            return 0;
         }
         if (!tmp.renameTo(apk)) throw new IOException("cannot move " + tmp);
         prefs(app).edit()
@@ -140,6 +220,7 @@ final class AppUpdater {
                 .putString(KEY_READY_NAME, rel.optString("name", info.versionName))
                 .apply();
         Log.i(TAG, "update " + info.getLongVersionCode() + " downloaded");
+        return info.getLongVersionCode();
     }
 
     private static void offerInstall(Activity activity, long code, String name) {
