@@ -59,8 +59,12 @@ fi
 # Omarchy ships ufw with incoming traffic denied; let the tailnet in.
 if systemctl is-active -q ufw 2>/dev/null && [ ! -e ~/.config/a-sh/ufw-tailscale ]; then
 	echo "Allowing Tailscale traffic through ufw (one time)..."
-	sudo ufw allow in on tailscale0 >/dev/null
-	mkdir -p ~/.config/a-sh && touch ~/.config/a-sh/ufw-tailscale
+	if [ -t 0 ] || sudo -n true 2>/dev/null; then
+		sudo ufw allow in on tailscale0 >/dev/null
+		mkdir -p ~/.config/a-sh && touch ~/.config/a-sh/ufw-tailscale
+	else
+		echo "  (no terminal for sudo — if the phone can't connect, run: sudo ufw allow in on tailscale0)"
+	fi
 fi
 
 # --- QR + one-shot key listener ----------------------------------------------
@@ -125,6 +129,17 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, "ok\n")
 
 subprocess.run(["qrencode", "-t", "ansiutf8", "-m", "2", url])
+# On a desktop, also open it as an image: easier to scan than terminal blocks.
+if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"):
+    png = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "a-sh-pair.png")
+    if subprocess.run(["qrencode", "-s", "12", "-m", "3", "-o", png, url]).returncode == 0:
+        for viewer in (["imv", png], ["xdg-open", png]):
+            try:
+                viewer_proc = subprocess.Popen(viewer, stdout=subprocess.DEVNULL,
+                                               stderr=subprocess.DEVNULL)
+                break
+            except FileNotFoundError:
+                continue
 print(f"\nScan with your phone's camera → opens A-SH → SSH to {user}@{name} ({ip}).")
 print(f"No camera link? Copy this, then in A-SH long-press + → \"Paste pairing link\":\n\n  {url}\n")
 
@@ -145,4 +160,8 @@ except KeyboardInterrupt:
 if not paired:
     sys.exit("Timed out — run a-sh-pair again for a fresh code.")
 print(f"Paired ✓  {paired[0]}")
+try:
+    viewer_proc.terminate()
+except NameError:
+    pass
 PY
