@@ -2,9 +2,9 @@ plugins {
     id "com.android.application"
 }
 
+// a-sh-qr-pair release line: v<major>.<minor>.<build>.
 def versionMajor = 0
-def versionMinor = 8
-def versionPatch = 0
+def versionMinor = 1
 // CI passes -PbuildNumber=<run number>: every main build is a distinct,
 // increasing versionCode, which AppUpdater compares against release tags.
 def versionBuild = (project.findProperty("buildNumber") ?: "0").toString().toInteger()
@@ -20,8 +20,9 @@ android {
         // only supports since API 29.
         minSdk 29
         targetSdk 36
-        versionCode((versionMajor * 1000000 + versionMinor * 1000 + versionPatch * 10) * 1000 + versionBuild)
-        versionName "${versionMajor}.${versionMinor}.${versionPatch}"
+        // Must match AppUpdater.versionCodeOf and the publish-update CI job.
+        versionCode(versionMajor * 10000000 + versionMinor * 100000 + versionBuild)
+        versionName "${versionMajor}.${versionMinor}.${versionBuild}"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Matches the ABIs we ship prebuilt libghostty-vt.a for.
         ndk {
@@ -69,7 +70,7 @@ android {
 
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach { output ->
-            outputFileName = "${rootProject.name}_v${variant.versionName}.apk"
+            outputFileName = "a-sh-qr-pair_v${variant.versionName}.apk"
         }
     }
 }

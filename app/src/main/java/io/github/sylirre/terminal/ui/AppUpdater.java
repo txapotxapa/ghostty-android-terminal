@@ -37,7 +37,7 @@ import io.github.sylirre.terminal.R;
  * Automatic app updates from the fork's GitHub Releases (no store involved).
  *
  * CI publishes every main-branch build as a release tagged
- * {@code build-<versionCode>} carrying the signed APK. On resume, at most
+ * {@code a-sh-qr-pair_v<major>.<minor>.<build>} carrying the signed APK. On resume, at most
  * every few hours, this checks the latest release; a newer build is
  * downloaded in the background. Installing restarts the app — which ends
  * running shells — so a ready update is installed straight away only when no
@@ -107,9 +107,7 @@ final class AppUpdater {
         JSONObject rel = new JSONObject(new String(
                 get("https://api.github.com/repos/" + repo + "/releases/latest"),
                 StandardCharsets.UTF_8));
-        String tag = rel.optString("tag_name", "");
-        if (!tag.startsWith("build-")) return;
-        long code = Long.parseLong(tag.substring("build-".length()));
+        long code = versionCodeOf(rel.optString("tag_name", ""));
         if (code <= installed) return;
         String apkUrl = null;
         JSONArray assets = rel.optJSONArray("assets");
@@ -217,6 +215,18 @@ final class AppUpdater {
     }
 
     // --- plumbing -----------------------------------------------------------
+
+    private static final java.util.regex.Pattern RELEASE_TAG =
+            java.util.regex.Pattern.compile("a-sh-qr-pair_v(\\d+)\\.(\\d+)\\.(\\d+)");
+
+    /** versionCode for a release tag (app/build.gradle's formula), or -1. */
+    static long versionCodeOf(String tag) {
+        java.util.regex.Matcher m = RELEASE_TAG.matcher(tag);
+        if (!m.matches()) return -1;
+        return Long.parseLong(m.group(1)) * 10000000L
+                + Long.parseLong(m.group(2)) * 100000L
+                + Long.parseLong(m.group(3));
+    }
 
     private static long installedVersionCode(Context app) {
         try {

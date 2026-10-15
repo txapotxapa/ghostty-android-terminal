@@ -7,7 +7,7 @@ phone first: the QR code from step 2 expires after 5 minutes.
 
 1. Install **Tailscale** from the Play Store, open it, sign in, and switch it on.
 2. On the phone, open the [latest release](https://github.com/txapotxapa/ghostty-android-terminal/releases/latest)
-   and tap the `.apk` file under **Assets** (e.g. `A-SH_build-8000002.apk`, ~130 MB).
+   and tap the `.apk` file under **Assets** (named like `a-sh-qr-pair_v0.1.7.apk`, ~130 MB).
 3. Open the download. If Android blocks it, tap **Settings**, allow
    **Install unknown apps** for your browser, go back, and tap **Install**.
 4. Open **A-SH** → **Continue** → leave **Omarchy** selected → **Install Omarchy**

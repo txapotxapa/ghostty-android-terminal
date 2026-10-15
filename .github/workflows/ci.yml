@@ -150,7 +150,7 @@ jobs:
           files: "*.apk"
           generate_release_notes: true
 
-  # Every main build becomes a release tagged build-<versionCode>; installed
+  # Every main build becomes a release a-sh-qr-pair_v0.1.<run>; installed
   # apps pick it up automatically (AppUpdater). Not gated on the emulator
   # suite, which is slow and flaky on hosted runners; tag releases above are.
   publish-update:
@@ -172,12 +172,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apk=$(ls *.apk | head -n1)
-          # Must match app/build.gradle's versionCode formula.
-          set -- $(echo "$apk" | sed -E 's/.*_v([0-9]+)\.([0-9]+)\.([0-9]+)\.apk/\1 \2 \3/')
-          code=$(( ($1 * 1000000 + $2 * 1000 + $3 * 10) * 1000 + ${{ github.run_number }} ))
-          mv "$apk" "A-SH_build-${code}.apk"
-          gh release create "build-${code}" "A-SH_build-${code}.apk" \
+          apk=$(ls a-sh-qr-pair_v*.apk | head -n1)
+          name=${apk%.apk}
+          gh release create "$name" "$apk" \
             --repo "${{ github.repository }}" --target "${{ github.sha }}" \
-            --title "A-SH $1.$2.$3 (build ${{ github.run_number }})" \
+            --title "$name" \
             --notes "Automatic build of ${{ github.sha }}." --latest

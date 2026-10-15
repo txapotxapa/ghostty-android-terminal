@@ -135,7 +135,7 @@
     <string name="toast_ssh_needs_linux">SSH pairing runs inside Linux — set up a distribution first, then scan again.</string>
     <string name="toast_ssh_helper_failed">Couldn\'t prepare SSH pairing: %s</string>
     <string name="toast_ssh_no_link">No pairing link on the clipboard. Run a-sh-pair on your computer and copy the ash:// link it prints.</string>
-    <!-- GitHub owner/repo whose releases (tag build-<versionCode>, one .apk) the app updates from; empty disables. -->
+    <!-- GitHub owner/repo whose releases (tag a-sh-qr-pair_v<major>.<minor>.<build>, one .apk) the app updates from; empty disables. -->
     <string name="update_repo" translatable="false">txapotxapa/ghostty-android-terminal</string>
     <string name="update_ready_title">Update ready</string>
     <string name="update_ready_message">%1$s is downloaded. Installing restarts the app and ends open sessions; otherwise it installs on the next fresh launch.</string>
