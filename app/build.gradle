@@ -98,6 +98,9 @@ dependencies {
     // Pure-Java XZ decoder for the rootfs installer (tar parsing is local
     // code: the rootfs tarballs only need files/dirs/links).
     implementation "org.tukaani:xz:1.10"
+    // In-app QR scan for SSH pairing (SshLinks). Google's code scanner runs
+    // in Play services, so the app itself needs no camera permission.
+    implementation "com.google.android.gms:play-services-code-scanner:16.1.0"
 
     androidTestImplementation "androidx.test:core:1.6.1"
     androidTestImplementation "androidx.test:runner:1.6.2"

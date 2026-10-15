@@ -539,6 +539,32 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         }
     }
 
+    /**
+     * Scan the a-sh-pair QR from inside the app. Google's code scanner lives
+     * in Play services (no camera permission here); without it, the camera
+     * app or "Paste pairing link" still work.
+     */
+    private void scanPairingQr() {
+        com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions opts =
+                new com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+                        .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+                        .build();
+        com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this, opts)
+                .startScan()
+                .addOnSuccessListener(code -> {
+                    String link = SshLinks.validate(code.getRawValue());
+                    if (link == null) {
+                        Toast.makeText(this, R.string.toast_ssh_not_pairing_qr,
+                                Toast.LENGTH_LONG).show();
+                    } else {
+                        openSshPairingTab(link);
+                    }
+                })
+                .addOnFailureListener(e -> Toast.makeText(this,
+                        getString(R.string.toast_ssh_scan_failed, e.getMessage()),
+                        Toast.LENGTH_LONG).show());
+    }
+
     /** Fallback for cameras that won't open ash:// links: paste the printed link. */
     private void pastePairingLink() {
         ClipboardManager cm = getSystemService(ClipboardManager.class);
@@ -614,6 +640,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private void showSessionTypeChooser() {
         List<String> labels = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
+
+        // First: the main thing this fork is for.
+        labels.add(getString(R.string.session_type_ssh_scan));
+        actions.add(this::scanPairingQr);
 
         if (userlandByDefault()) {
             labels.add(getString(R.string.session_type_userland));

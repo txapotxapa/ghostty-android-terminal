@@ -128,7 +128,10 @@
     <string name="session_type_vm_terminal">Guest machine terminal (%1$s)</string>
     <string name="session_type_vm_stop">Stop guest machine</string>
     <string name="session_type_ssh">SSH → %1$s</string>
+    <string name="session_type_ssh_scan">Scan QR to pair</string>
     <string name="session_type_ssh_paste">Paste pairing link</string>
+    <string name="toast_ssh_not_pairing_qr">That QR isn\'t an A-SH pairing code. Run a-sh-pair on your computer.</string>
+    <string name="toast_ssh_scan_failed">Couldn\'t scan: %s</string>
     <string name="session_type_ssh_forget">Forget saved SSH host…</string>
     <string name="ssh_forget">Forget</string>
     <string name="ssh_forget_message">Remove “SSH → %1$s” from the menu? Its key and ~/.ssh/config entry stay in the userland.</string>
