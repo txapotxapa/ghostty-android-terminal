@@ -37,6 +37,7 @@ public final class AppSettings {
     private static final String KEY_TEXT_MARGIN_RIGHT = "text_margin_right";
     private static final String KEY_HIDE_EXTRA_KEYS_WHEN_KB_HIDDEN = "hide_extra_keys_when_kb_hidden";
     private static final String KEY_EXTRA_KEYS_SWITCH = "extra_keys_switch";
+    private static final String KEY_EXTRA_KEYS_COLLAPSED = "extra_keys_collapsed";
     private static final String KEY_EXTRA_KEYS_ROW_PADDING = "extra_keys_row_padding";
     private static final String KEY_GRAPHEME_CLUSTERING = "grapheme_clustering";
     private static final String KEY_SMOOTH_SCROLL = "smooth_scroll";
@@ -146,6 +147,15 @@ public final class AppSettings {
      * Disabling it only hides the toolbar — the configured key layout is kept
      * (in {@link ExtraKeysConfig}) and reappears unchanged when re-enabled.
      */
+    /** Whether the extra-keys panel is folded to its slim control strip. */
+    public boolean extraKeysCollapsed() {
+        return prefs.getBoolean(KEY_EXTRA_KEYS_COLLAPSED, false);
+    }
+
+    public void setExtraKeysCollapsed(boolean collapsed) {
+        prefs.edit().putBoolean(KEY_EXTRA_KEYS_COLLAPSED, collapsed).apply();
+    }
+
     public boolean extraKeysEnabled() {
         return prefs.getBoolean(KEY_EXTRA_KEYS_ENABLED, true);
     }

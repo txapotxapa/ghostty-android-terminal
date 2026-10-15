@@ -78,6 +78,13 @@ public class ExtraKeysView extends LinearLayout {
     // updateToggles() can recolor them without knowing the layout in advance.
     private final List<ModButton> modButtons = new ArrayList<>();
 
+    // Trailing control column (not part of the configurable layout): a soft
+    // keyboard toggle and a collapse chevron. Collapsed, the panel shrinks to
+    // a slim strip holding just those two, so the keyboard stays reachable.
+    private boolean collapsed = false;
+    private Runnable onKeyboardToggle;
+    private java.util.function.Consumer<Boolean> onCollapsedChanged;
+
     private static final int REPEAT_INTERVAL_MS = 80;
 
     // Upward travel (px) that turns a press into a swipe-up secondary emit.
@@ -149,6 +156,25 @@ public class ExtraKeysView extends LinearLayout {
     }
 
     /**
+     * Wires the trailing control column: {@code keyboardToggle} shows or hides
+     * the soft keyboard; {@code collapsedChanged} is told when the user folds or
+     * unfolds the panel (to persist it).
+     */
+    public void setControls(Runnable keyboardToggle,
+            java.util.function.Consumer<Boolean> collapsedChanged) {
+        onKeyboardToggle = keyboardToggle;
+        onCollapsedChanged = collapsedChanged;
+        reload();
+    }
+
+    /** Folds the panel to the slim control strip (true) or shows the keys. */
+    public void setCollapsed(boolean collapse) {
+        if (collapsed == collapse) return;
+        collapsed = collapse;
+        reload();
+    }
+
+    /**
      * Shows or hides the leading profile-switch column (only ever visible when
      * more than one profile exists). Rebuilds so the change applies immediately.
      */
@@ -188,25 +214,25 @@ public class ExtraKeysView extends LinearLayout {
         List<List<ExtraKey>> rows = config.enabledRows(getContext());
         hasKeys = !rows.isEmpty();
 
-        // With the switch column the toolbar becomes [switch | stacked rows];
-        // without it the rows stack directly in this vertical container.
-        LinearLayout rowsContainer;
-        if (showSwitch && hasKeys && config.profileCount() > 1) {
-            setOrientation(HORIZONTAL);
+        // The toolbar is [switch? | stacked rows | controls]. Collapsed, the
+        // rows are left out and the controls lie flat at the right end.
+        setOrientation(HORIZONTAL);
+        int m = Chrome.dp(getContext(), R.dimen.key_gap) / 2;
+        if (!collapsed && showSwitch && hasKeys && config.profileCount() > 1) {
             LayoutParams swLp = new LayoutParams(
                     Chrome.dp(getContext(), R.dimen.key_switch_width), LayoutParams.MATCH_PARENT);
-            int m = Chrome.dp(getContext(), R.dimen.key_gap) / 2;
             swLp.setMargins(m, m, m, m);
             addView(buildSwitchColumn(), swLp);
-            rowsContainer = new LinearLayout(getContext());
-            rowsContainer.setOrientation(VERTICAL);
-            addView(rowsContainer, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f));
-        } else {
-            setOrientation(VERTICAL);
-            rowsContainer = this;
         }
+        LinearLayout rowsContainer = new LinearLayout(getContext());
+        rowsContainer.setOrientation(VERTICAL);
+        addView(rowsContainer, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f));
+        // Expanded, the controls stretch to the rows' height; collapsed there
+        // are no rows to match, so they size themselves.
+        addView(buildControls(), new LayoutParams(LayoutParams.WRAP_CONTENT,
+                collapsed ? LayoutParams.WRAP_CONTENT : LayoutParams.MATCH_PARENT));
 
-        for (List<ExtraKey> row : rows) {
+        if (!collapsed) for (List<ExtraKey> row : rows) {
             LinearLayout rowView = new LinearLayout(getContext());
             rowView.setOrientation(HORIZONTAL);
             for (ExtraKey key : row) addKey(key, rowView);
@@ -221,6 +247,51 @@ public class ExtraKeysView extends LinearLayout {
         }
         applyVisibility();
         updateToggles();
+    }
+
+    /**
+     * The trailing control column: keyboard toggle over a collapse chevron, or
+     * side by side (keyboard, expand chevron) when collapsed.
+     */
+    private View buildControls() {
+        LinearLayout col = new LinearLayout(getContext());
+        col.setOrientation(collapsed ? HORIZONTAL : VERTICAL);
+        int m = Chrome.dp(getContext(), R.dimen.key_gap) / 2;
+        int w = Chrome.dp(getContext(), R.dimen.key_switch_width);
+        View kb = controlCap(R.drawable.ic_glyph_keyboard, R.string.extra_keys_keyboard,
+                () -> { if (onKeyboardToggle != null) onKeyboardToggle.run(); });
+        View fold = controlCap(collapsed ? R.drawable.ic_glyph_chevron_up
+                        : R.drawable.ic_glyph_chevron_down,
+                collapsed ? R.string.extra_keys_expand : R.string.extra_keys_collapse,
+                () -> {
+                    setCollapsed(!collapsed);
+                    if (onCollapsedChanged != null) onCollapsedChanged.accept(collapsed);
+                });
+        for (View v : new View[] {kb, fold}) {
+            LayoutParams lp = collapsed
+                    ? new LayoutParams(w, Chrome.dp(getContext(), R.dimen.key_switch_width))
+                    : new LayoutParams(w, 0, 1f);
+            lp.setMargins(m, m, m, m);
+            col.addView(v, lp);
+        }
+        return col;
+    }
+
+    private View controlCap(int icon, int description, Runnable action) {
+        ImageView v = new ImageView(getContext());
+        v.setImageResource(icon);
+        v.setImageTintList(ColorStateList.valueOf(palette.accent));
+        v.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int pad = Chrome.dp(getContext(), R.dimen.key_pad_h);
+        v.setPadding(pad, pad, pad, pad);
+        v.setBackground(keyBg());
+        v.setContentDescription(getContext().getString(description));
+        v.setClickable(true);
+        v.setOnClickListener(x -> {
+            x.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            action.run();
+        });
+        return v;
     }
 
     /** The leading profile-switch cap: tap cycles the active profile, long-press chooses. */
@@ -265,7 +336,9 @@ public class ExtraKeysView extends LinearLayout {
     }
 
     private void applyVisibility() {
-        boolean show = enabledRow && hasKeys && (!hideWhenKeyboardHidden || keyboardVisible);
+        // No hasKeys check: the control column (keyboard toggle) is useful
+        // even with every key removed from the layout.
+        boolean show = enabledRow && (!hideWhenKeyboardHidden || keyboardVisible);
         setVisibility(show ? VISIBLE : GONE);
     }
 

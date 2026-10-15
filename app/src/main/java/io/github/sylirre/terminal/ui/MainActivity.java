@@ -107,6 +107,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private long lastClipToastUptime;
     private ExtraKeysView extraKeys;
     private TerminalSession current;
+    /** Last IME visibility reported by the window insets. */
+    private boolean imeVisible;
     /** A QR pairing link that arrived before a tab could be opened for it. */
     private String pendingSshLink;
     private AppSettings settings;
@@ -165,6 +167,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         extraKeys.setHideWhenKeyboardHidden(settings.hideExtraKeysWhenKeyboardHidden());
         extraKeys.setShowSwitch(settings.showExtraKeysSwitch());
         extraKeys.setKeyVerticalPaddingDp(settings.extraKeysVerticalPadding());
+        extraKeys.setCollapsed(settings.extraKeysCollapsed());
+        extraKeys.setControls(this::toggleKeyboard, settings::setExtraKeysCollapsed);
         applyKeepScreenOn(settings.keepScreenOn());
         applyImmersiveMode(settings.immersiveMode());
         terminal.setRichKeyboard(settings.richKeyboard());
@@ -225,6 +229,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 imeVisible = insets.getSystemWindowInsetBottom()
                         > insets.getStableInsetBottom();
             }
+            MainActivity.this.imeVisible = imeVisible;
             extraKeys.setKeyboardVisible(imeVisible);
             // WindowInsets.CONSUMED is API 30; on 29 (our minSdk) touching it
             // throws NoSuchFieldError, so consume the old way there.
@@ -848,6 +853,46 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         terminal.requestFocus();
         InputMethodManager imm = getSystemService(InputMethodManager.class);
         if (imm != null) imm.showSoftInput(terminal, 0);
+    }
+
+    /**
+     * The extra-keys keyboard button. Taps on the terminal don't always bring
+     * the IME back (focus lost to a dialog, the IME dismissed by back), so this
+     * forces it: on 30+ through the window's inset controller, which shows the
+     * IME even when showSoftInput is ignored.
+     */
+    private void toggleKeyboard() {
+        // Ask the window now: the cached inset flag can lag (an IME raised by
+        // the window's own soft-input mode at launch doesn't always report).
+        boolean shown = imeVisible;
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsets now = terminal.getRootWindowInsets();
+            if (now != null) shown = now.isVisible(WindowInsets.Type.ime());
+        }
+        if (shown) {
+            // Hide the same way it's shown: on 30+ the inset controller (the
+            // IMM call is ignored for an IME the controller brought up).
+            if (Build.VERSION.SDK_INT >= 30) {
+                WindowInsetsController c = terminal.getWindowInsetsController();
+                if (c != null) {
+                    c.hide(WindowInsets.Type.ime());
+                    return;
+                }
+            }
+            InputMethodManager imm = getSystemService(InputMethodManager.class);
+            if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
+            return;
+        }
+        terminal.requestFocus();
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = terminal.getWindowInsetsController();
+            if (c != null) {
+                c.show(WindowInsets.Type.ime());
+                return;
+            }
+        }
+        InputMethodManager imm = getSystemService(InputMethodManager.class);
+        if (imm != null) imm.showSoftInput(terminal, InputMethodManager.SHOW_FORCED);
     }
 
     /** Opens the find bar and highlights the search button. */
