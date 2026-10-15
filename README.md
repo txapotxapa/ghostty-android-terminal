@@ -42,9 +42,10 @@ QR to the phone (e.g. any messaging app), then in A-SH **long-press +** →
 - Reconnect: **long-press +** → **SSH → <computer name>**. Or type `ssh <computer name>`
   (herdr) or `ssh <computer name>-sh` (a plain shell) in any A-SH tab.
 - New phone, or reset the pairing: run `a-sh-pair` on the computer and scan again.
-- Updates are automatic. The app updates itself from Releases: the first update
-  asks you to confirm once, and later ones install the next time you open the app
-  with no tabs running. Omarchy runs a daily background `pacman -Syu`, and the
+- Updates are automatic. The app downloads new releases in the background and
+  installs them the next time you open it with no tabs running. The very first
+  time, Android asks you to allow **Install unknown apps** for A-SH: tap
+  **Settings**, switch it on, and go back. After that, updates are silent. Omarchy runs a daily background `pacman -Syu`, and the
   computer updates herdr and `a-sh-pair` daily.
 
 ---
