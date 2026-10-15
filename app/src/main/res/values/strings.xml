@@ -127,6 +127,21 @@
     <string name="session_type_vm_start">Start guest machine</string>
     <string name="session_type_vm_terminal">Guest machine terminal (%1$s)</string>
     <string name="session_type_vm_stop">Stop guest machine</string>
+    <string name="session_type_ssh">SSH → %1$s</string>
+    <string name="session_type_ssh_paste">Paste pairing link</string>
+    <string name="session_type_ssh_forget">Forget saved SSH host…</string>
+    <string name="ssh_forget">Forget</string>
+    <string name="ssh_forget_message">Remove “SSH → %1$s” from the menu? Its key and ~/.ssh/config entry stay in the userland.</string>
+    <string name="toast_ssh_needs_linux">SSH pairing runs inside Linux — set up a distribution first, then scan again.</string>
+    <string name="toast_ssh_helper_failed">Couldn\'t prepare SSH pairing: %s</string>
+    <string name="toast_ssh_no_link">No pairing link on the clipboard. Run a-sh-pair on your computer and copy the ash:// link it prints.</string>
+    <!-- GitHub owner/repo whose releases (tag build-<versionCode>, one .apk) the app updates from; empty disables. -->
+    <string name="update_repo" translatable="false">txapotxapa/ghostty-android-terminal</string>
+    <string name="update_ready_title">Update ready</string>
+    <string name="update_ready_message">%1$s is downloaded. Installing restarts the app and ends open sessions; otherwise it installs on the next fresh launch.</string>
+    <string name="update_install_now">Install now</string>
+    <string name="update_later">Next launch</string>
+    <string name="update_failed">Update failed: %s</string>
 
     <!-- Guest machine (full-system emulation) -->
     <string name="vm_extract_title">Preparing guest machine</string>
@@ -357,6 +372,8 @@
     <string name="onb_choose_subtitle">Installed offline from an image bundled with the app. You can back it up or replace it later from Settings.</string>
     <string name="onb_distro_alpine">Alpine Linux</string>
     <string name="onb_distro_alpine_blurb">Lightweight and quick to set up. BusyBox tools plus the apk package manager.</string>
+    <string name="onb_distro_omarchy">Omarchy</string>
+    <string name="onb_distro_omarchy_blurb">Arch Linux with Omarchy\'s terminal setup: pacman, starship, eza, fzf, zoxide, neovim. Updates itself in the background.</string>
     <string name="onb_distro_debian">Debian</string>
     <string name="onb_distro_debian_blurb">The classic full-size distribution: apt and a vast package archive.</string>
     <string name="onb_distro_size">%1$d MB image</string>

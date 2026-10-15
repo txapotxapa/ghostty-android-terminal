@@ -1,0 +1,24 @@
+diff --git i/src/sys_file.c w/src/sys_file.c
+index 67eec3b..0506917 100644
+--- i/src/sys_file.c
++++ w/src/sys_file.c
+@@ -1464,11 +1464,19 @@ SYSDEF(fremovexattr) { /* (fd, name) */
+  * all four hosts, so a size-tagged bounce is enough. */
+ typedef struct { u32 cmd; u16 size; u8 dir; } IoctlEnt;   /* dir: 0 none/int-arg, 1 read(out), 2 write(in), 3 rw */
+ #define IOC_TERMIOS_SZ 36   /* kernel struct termios: 4 u32 + c_line + c_cc[19] */
++#define IOC_TERMIOS2_SZ 44  /* kernel struct termios2: termios + 2 u32 speeds */
+ static const IoctlEnt ioctl_tab[] = {
+     { 0x5401 /*TCGETS*/,     IOC_TERMIOS_SZ, 1 },
+     { 0x5402 /*TCSETS*/,     IOC_TERMIOS_SZ, 2 },
+     { 0x5403 /*TCSETSW*/,    IOC_TERMIOS_SZ, 2 },
+     { 0x5404 /*TCSETSF*/,    IOC_TERMIOS_SZ, 2 },
++    /* termios2 (termios + u32 c_ispeed/c_ospeed). glibc >= 2.42 implements
++     * tcgetattr/tcsetattr, and so isatty(), with these: without them bash
++     * never goes interactive and readline/fzf/nvim see no terminal. */
++    { 0x802c542a /*TCGETS2*/,  IOC_TERMIOS2_SZ, 1 },
++    { 0x402c542b /*TCSETS2*/,  IOC_TERMIOS2_SZ, 2 },
++    { 0x402c542c /*TCSETSW2*/, IOC_TERMIOS2_SZ, 2 },
++    { 0x402c542d /*TCSETSF2*/, IOC_TERMIOS2_SZ, 2 },
+     { 0x5409 /*TCSBRK*/,     0, 0 },
+     { 0x540A /*TCXONC*/,     0, 0 },
+     { 0x540B /*TCFLSH*/,     0, 0 },

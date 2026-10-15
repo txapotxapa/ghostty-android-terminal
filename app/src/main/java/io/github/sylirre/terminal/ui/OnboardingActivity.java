@@ -350,6 +350,7 @@ public final class OnboardingActivity extends Activity {
     private String distroTitle(UserlandDistro d) {
         switch (d.id) {
             case "alpine": return getString(R.string.onb_distro_alpine);
+            case "omarchy": return getString(R.string.onb_distro_omarchy);
             case "debian": return getString(R.string.onb_distro_debian);
             default:
                 // Locale.ROOT: the id is an ASCII asset-name token, and the
@@ -362,6 +363,7 @@ public final class OnboardingActivity extends Activity {
     private String distroBlurb(UserlandDistro d) {
         switch (d.id) {
             case "alpine": return getString(R.string.onb_distro_alpine_blurb);
+            case "omarchy": return getString(R.string.onb_distro_omarchy_blurb);
             case "debian": return getString(R.string.onb_distro_debian_blurb);
             default: return "";
         }
@@ -371,6 +373,7 @@ public final class OnboardingActivity extends Activity {
         if (d == null) return Chrome.color(this, R.color.surface_3);
         switch (d.id) {
             case "alpine": return Chrome.color(this, R.color.onb_alpine_tile);
+            case "omarchy": return Chrome.color(this, R.color.onb_omarchy_tile);
             case "debian": return Chrome.color(this, R.color.onb_debian_tile);
             default: return Chrome.color(this, R.color.accent_soft);
         }
@@ -380,6 +383,7 @@ public final class OnboardingActivity extends Activity {
         if (d == null) return Chrome.color(this, R.color.text_secondary);
         switch (d.id) {
             case "alpine": return Chrome.color(this, R.color.onb_alpine_ink);
+            case "omarchy": return Chrome.color(this, R.color.onb_omarchy_ink);
             case "debian": return Chrome.color(this, R.color.onb_debian_ink);
             default: return Chrome.color(this, R.color.accent);
         }

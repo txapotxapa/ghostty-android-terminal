@@ -13,6 +13,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Terminal bell haptic feedback. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Self-updates from GitHub Releases (AppUpdater). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- One-time prompt to exempt the app from Doze battery optimization. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Optional storage bind mounts for userland sessions. -->
@@ -37,6 +40,13 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- QR SSH pairing links from tools/a-sh-pair (SshLinks). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ash" android:host="ssh" />
             </intent-filter>
         </activity>
 
@@ -72,6 +82,11 @@
             android:parentActivityName=".ui.MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|density|uiMode"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- PackageInstaller session results for self-updates (AppUpdater). -->
+        <receiver
+            android:name=".ui.AppUpdater$InstallResultReceiver"
+            android:exported="false" />
 
         <!-- Holds the process at foreground priority while shells run.
              stopWithTask=false keeps it (and the shells) alive when the

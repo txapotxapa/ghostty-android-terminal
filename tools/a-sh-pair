@@ -1,0 +1,148 @@
+#!/bin/bash
+# a-sh-pair — show a QR code that sets up SSH from A-SH (phone) to this computer.
+#
+# Run it on the home computer once Tailscale is up. Scan the QR with the
+# phone's camera: A-SH opens, generates a key, hands it to this script over
+# the tailnet, pins this host's key, and drops you into an SSH session. After
+# that, A-SH's new-tab menu (long-press +) has a one-tap "SSH → <name>" entry.
+#
+#   a-sh-pair [name]        name defaults to this computer's hostname
+#
+# Security: the pairing listener binds only to this machine's Tailscale IP,
+# accepts exactly one public key carrying a random one-time token, and exits
+# after it (or after 5 minutes). The QR also carries this host's SSH key, so
+# the phone never has to trust-on-first-use. Treat the QR like a password
+# until it's been scanned.
+#
+# Needs: tailscale, sshd, python3, qrencode. Omarchy: `sudo pacman -S qrencode`.
+set -euo pipefail
+
+NAME=${1:-$(hostname -s)}
+TIMEOUT=300
+
+die() { echo "a-sh-pair: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null || die "missing '$1' — install it first ($2)"; }
+need tailscale "sudo pacman -S tailscale"
+need python3 "sudo pacman -S python"
+need qrencode "sudo pacman -S qrencode"
+
+# --- Tailscale ---------------------------------------------------------------
+state=$(tailscale status --json 2>/dev/null | python3 -c \
+	'import json,sys; print(json.load(sys.stdin).get("BackendState",""))' || true)
+if [ "$state" != Running ]; then
+	echo "Tailscale isn't connected — starting it..."
+	sudo systemctl enable --now tailscaled
+	sudo tailscale up
+fi
+IP=$(tailscale ip -4 | head -n1)
+[ -n "$IP" ] || die "no Tailscale IPv4 address"
+
+# Tailscale SSH answers port 22 itself (tailnet identity, no keys).
+TS_SSH=$(tailscale debug prefs 2>/dev/null | python3 -c \
+	'import json,sys; print(int(bool(json.load(sys.stdin).get("RunSSH"))))' || echo 0)
+
+# --- sshd --------------------------------------------------------------------
+PORT=22
+if [ "$TS_SSH" = 0 ]; then
+	if ! systemctl is-active -q sshd; then
+		echo "Enabling the SSH server..."
+		sudo systemctl enable --now sshd
+	fi
+	# sshd -T needs root (it loads host keys); the config files don't.
+	PORT=$(cat /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null |
+		awk 'tolower($1)=="port"{print $2; exit}')
+	PORT=${PORT:-22}
+	[ -r /etc/ssh/ssh_host_ed25519_key.pub ] || die "no ed25519 host key in /etc/ssh"
+	HOSTKEY=$(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)
+fi
+
+# Omarchy ships ufw with incoming traffic denied; let the tailnet in.
+if systemctl is-active -q ufw 2>/dev/null && [ ! -e ~/.config/a-sh/ufw-tailscale ]; then
+	echo "Allowing Tailscale traffic through ufw (one time)..."
+	sudo ufw allow in on tailscale0 >/dev/null
+	mkdir -p ~/.config/a-sh && touch ~/.config/a-sh/ufw-tailscale
+fi
+
+# --- QR + one-shot key listener ----------------------------------------------
+exec python3 -u - "$IP" "$PORT" "$USER" "$NAME" "$TS_SSH" "${HOSTKEY:-}" "$TIMEOUT" <<'PY'
+import hmac, os, re, secrets, socket, subprocess, sys, time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, quote
+
+ip, port, user, name, ts_ssh, hostkey, timeout = sys.argv[1:8]
+timeout = int(timeout)
+token = secrets.token_urlsafe(18)
+KEY_RE = re.compile(r'^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/=]{40,}( [ -~]{0,100})?$')
+
+params = {"h": ip, "p": port, "u": user, "n": name}
+server = None
+if ts_ssh == "1":
+    params["ts"] = "1"
+else:
+    params["hk"] = hostkey
+    server = HTTPServer((ip, 0), BaseHTTPRequestHandler)
+    params["k"] = str(server.server_address[1])
+    params["t"] = token
+url = "ash://ssh?" + "&".join(f"{k}={quote(v, safe='')}" for k, v in params.items())
+
+paired = []
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+    def reply(self, code, body):
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(body.encode())
+
+    def do_POST(self):
+        if self.path != "/pair":
+            return self.reply(404, "no\n")
+        n = min(int(self.headers.get("Content-Length") or 0), 4096)
+        form = parse_qs(self.rfile.read(n).decode(errors="replace"))
+        t = form.get("t", [""])[0]
+        key = form.get("key", [""])[0].strip()
+        if not hmac.compare_digest(t.encode(), token.encode()):
+            return self.reply(403, "bad token\n")
+        if not KEY_RE.match(key):
+            return self.reply(400, "bad key\n")
+        ssh = os.path.expanduser("~/.ssh")
+        os.makedirs(ssh, mode=0o700, exist_ok=True)
+        os.chmod(ssh, 0o700)
+        ak = os.path.join(ssh, "authorized_keys")
+        parts = key.split()
+        line = f"{parts[0]} {parts[1]} a-sh@{name}-phone paired {time.strftime('%Y-%m-%d')}\n"
+        existing = open(ak).read() if os.path.exists(ak) else ""
+        if parts[1] not in existing:
+            with open(ak, "a") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write(line)
+        os.chmod(ak, 0o600)
+        paired.append(subprocess.run(["ssh-keygen", "-lf", "-"], input=line, text=True,
+                                     capture_output=True).stdout.strip())
+        self.reply(200, "ok\n")
+
+subprocess.run(["qrencode", "-t", "ansiutf8", "-m", "2", url])
+print(f"\nScan with your phone's camera → opens A-SH → SSH to {user}@{name} ({ip}).")
+print(f"No camera link? Copy this, then in A-SH long-press + → \"Paste pairing link\":\n\n  {url}\n")
+
+if server is None:
+    print("Tailscale SSH is on: nothing to pair, the phone connects with its tailnet identity.")
+    sys.exit(0)
+
+server.RequestHandlerClass = Handler
+server.timeout = 1
+deadline = time.time() + timeout
+print(f"Waiting for the phone (up to {timeout // 60} min, Ctrl-C to cancel)...")
+try:
+    while not paired and time.time() < deadline:
+        server.handle_request()
+except KeyboardInterrupt:
+    print()
+    sys.exit(130)
+if not paired:
+    sys.exit("Timed out — run a-sh-pair again for a fresh code.")
+print(f"Paired ✓  {paired[0]}")
+PY

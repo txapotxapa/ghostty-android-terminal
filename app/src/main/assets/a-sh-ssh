@@ -1,0 +1,109 @@
+#!/bin/sh
+# a-sh-ssh — the phone half of A-SH's QR SSH pairing (home half: tools/a-sh-pair).
+#
+# A-SH copies this into the userland as /usr/local/bin/a-sh-ssh and types
+#   a-sh-ssh 'ash://ssh?h=…&p=…&u=…&n=…[&hk=…&k=…&t=…][&ts=1]'
+# into a fresh tab when a pairing QR is scanned. It installs an SSH client if
+# needed, makes a key, sends the public half to the home computer (one-time
+# token, over the tailnet), pins the host key, writes a `Host <name>` entry to
+# ~/.ssh/config and connects. Plain `ssh <name>` works from then on.
+#
+# Runs on any bundled distro (Alpine ash, Debian/Omarchy bash): POSIX sh only.
+set -e
+
+die() { echo "a-sh-ssh: $*" >&2; exit 1; }
+
+url=$1
+case $url in ash://ssh\?*) ;; *) die "not an A-SH pairing link: $url" ;; esac
+
+# --- parse the query string --------------------------------------------------
+# awk, not printf %b: dash's printf has no \x escapes.
+urldecode() {
+	printf '%s\n' "$1" | awk '
+	function hex(d,  i, v) { v = 0; d = toupper(d)
+		for (i = 1; i <= 2; i++) v = v * 16 + index("0123456789ABCDEF", substr(d, i, 1)) - 1
+		return v }
+	{ s = $0; out = ""
+	  while (match(s, /%[0-9A-Fa-f][0-9A-Fa-f]/)) {
+		out = out substr(s, 1, RSTART - 1) sprintf("%c", hex(substr(s, RSTART + 1, 2)))
+		s = substr(s, RSTART + 3) }
+	  print out s }'
+}
+h= p=22 u= n= hk= k= t= ts=
+set -f; oldifs=$IFS; IFS='&'
+for kv in ${url#ash://ssh\?}; do
+	v=$(urldecode "${kv#*=}")
+	case ${kv%%=*} in
+	h) h=$v ;; p) p=$v ;; u) u=$v ;; n) n=$v ;;
+	hk) hk=$v ;; k) k=$v ;; t) t=$v ;; ts) ts=$v ;;
+	esac
+done
+IFS=$oldifs; set +f
+
+# Everything here lands in ssh_config and a shell command line: be strict.
+printf '%s' "$h" | grep -Eq '^[0-9A-Za-z.:-]+$' || die "bad host"
+printf '%s' "$p" | grep -Eq '^[0-9]{1,5}$' || die "bad port"
+printf '%s' "$u" | grep -Eq '^[A-Za-z0-9._][A-Za-z0-9._-]*$' || die "bad user"
+printf '%s' "$n" | grep -Eq '^[A-Za-z0-9._-]+$' || die "bad name"
+[ -z "$k" ] || printf '%s' "$k" | grep -Eq '^[0-9]{1,5}$' || die "bad pairing port"
+[ -z "$hk" ] || printf '%s' "$hk" | grep -Eq '^ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+$' || die "bad host key"
+
+# --- tools -------------------------------------------------------------------
+if ! command -v ssh >/dev/null || { [ -n "$k" ] && ! command -v curl >/dev/null; }; then
+	echo "Installing the SSH client (one time)..."
+	if command -v apk >/dev/null; then apk add --no-cache openssh-client-default curl
+	elif command -v pacman >/dev/null; then pacman -S --noconfirm --needed openssh curl
+	elif command -v apt-get >/dev/null; then
+		apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-client curl
+	else die "no known package manager to install ssh with"
+	fi
+fi
+
+# --- key ---------------------------------------------------------------------
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+key=$HOME/.ssh/id_ed25519
+[ -f "$key" ] || ssh-keygen -q -t ed25519 -N '' -C "a-sh@$(hostname 2>/dev/null || echo phone)" -f "$key"
+
+if [ -n "$k" ]; then
+	echo "Pairing with $n ($h)..."
+	curl -fsS --max-time 20 --data-urlencode "t=$t" --data-urlencode "key=$(cat "$key.pub")" \
+		"http://$h:$k/pair" >/dev/null ||
+		die "pairing failed — is a-sh-pair still waiting on $n, and Tailscale on here?"
+fi
+
+# --- known_hosts + ssh_config ------------------------------------------------
+if [ -n "$hk" ]; then
+	[ "$p" = 22 ] && hostpat=$h || hostpat="[$h]:$p"
+	kh=$HOME/.ssh/known_hosts
+	touch "$kh"
+	awk -v h="$hostpat" '$1 != h' "$kh" > "$kh.new"
+	echo "$hostpat $hk" >> "$kh.new"
+	mv "$kh.new" "$kh"
+fi
+
+cfg=$HOME/.ssh/config
+touch "$cfg" && chmod 600 "$cfg"
+# Replace this host's previous block (between our markers), keep everything else.
+awk -v b="# a-sh:$n begin" -v e="# a-sh:$n end" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$cfg" > "$cfg.new"
+# `ssh <name>` lands in herdr (https://herdr.dev): plain `herdr` launches or
+# re-attaches the persistent agent workspace, so a dropped phone connection
+# never loses work. Hosts without herdr get a login shell; `ssh <name>-sh`
+# always does.
+{
+	echo "# a-sh:$n begin"
+	echo "Host $n $n-sh"
+	echo "	HostName $h"
+	echo "	Port $p"
+	echo "	User $u"
+	echo "	IdentityFile $key"
+	echo "	ServerAliveInterval 30"
+	[ -n "$hk" ] && echo "	StrictHostKeyChecking yes" || echo "	StrictHostKeyChecking accept-new"
+	echo "Host $n"
+	echo "	RequestTTY yes"
+	echo "	RemoteCommand exec \$SHELL -lc 'command -v herdr >/dev/null && exec herdr; exec \$SHELL -l'"
+	echo "# a-sh:$n end"
+} >> "$cfg.new"
+mv "$cfg.new" "$cfg"
+
+echo "Saved: 'ssh $n' opens herdr, 'ssh $n-sh' a plain shell. Connecting..."
+exec ssh "$n"

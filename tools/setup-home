@@ -1,0 +1,125 @@
+#!/bin/bash
+# setup-home — one command to make this computer reachable from A-SH.
+#
+#   bash <(curl -fsSL https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools/setup-home)
+#   # or, from a checkout:  tools/setup-home
+#
+# Installs and enables Tailscale + the OpenSSH server (+ qrencode), signs in
+# to Tailscale if needed, installs herdr (https://herdr.dev — the phone's
+# `ssh <name>` lands in it), sets up daily automatic updates for herdr and the
+# pairing tool, installs `a-sh-pair` into ~/.local/bin and runs it: scan the
+# QR it shows with the phone and you're in. Later phones or re-pairs: just run
+# `a-sh-pair`.
+#
+# Omarchy/Arch (pacman), Debian/Ubuntu (apt) and Fedora (dnf) are handled.
+set -euo pipefail
+
+RAW=https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools
+BIN=$HOME/.local/bin
+
+say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+
+pkgs=()
+command -v tailscale >/dev/null || pkgs+=(tailscale)
+command -v qrencode >/dev/null || pkgs+=(qrencode)
+command -v python3 >/dev/null || pkgs+=(python3)
+[ -x /usr/bin/sshd ] || [ -x /usr/sbin/sshd ] || pkgs+=(sshd)
+
+if [ ${#pkgs[@]} -gt 0 ]; then
+	say "Installing: ${pkgs[*]}"
+	if command -v pacman >/dev/null; then
+		sudo pacman -S --needed --noconfirm $(printf '%s\n' "${pkgs[@]}" |
+			sed 's/^sshd$/openssh/; s/^python3$/python/')
+	elif command -v apt-get >/dev/null; then
+		if [[ " ${pkgs[*]} " == *" tailscale "* ]]; then
+			curl -fsSL https://tailscale.com/install.sh | sh
+		fi
+		sudo apt-get install -y $(printf '%s\n' "${pkgs[@]}" | grep -v '^tailscale$' |
+			sed 's/^sshd$/openssh-server/')
+	elif command -v dnf >/dev/null; then
+		sudo dnf install -y $(printf '%s\n' "${pkgs[@]}" | sed 's/^sshd$/openssh-server/')
+	else
+		echo "Install these yourself, then re-run: ${pkgs[*]}" >&2
+		exit 1
+	fi
+fi
+
+say "Enabling Tailscale"
+sudo systemctl enable --now tailscaled
+if ! tailscale status >/dev/null 2>&1; then
+	say "Sign in to Tailscale (use the same account as the Tailscale app on your phone)"
+	sudo tailscale up
+fi
+
+say "Enabling the SSH server"
+ssh_unit=sshd
+systemctl cat sshd.service >/dev/null 2>&1 || ssh_unit=ssh   # Debian names it ssh
+sudo systemctl enable --now "$ssh_unit"
+
+# herdr: the official installer puts a self-updating binary in ~/.local/bin.
+# A distro/brew/mise package is left to its package manager.
+if ! command -v herdr >/dev/null && [ ! -x "$BIN/herdr" ]; then
+	say "Installing herdr"
+	curl -fsSL https://herdr.dev/install.sh | sh
+fi
+
+mkdir -p "$BIN"
+here=$(dirname "$(realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo /nonexistent)")
+if [ -f "$here/a-sh-pair" ]; then
+	install -m 755 "$here/a-sh-pair" "$BIN/a-sh-pair"
+else
+	curl -fsSL "$RAW/a-sh-pair" -o "$BIN/a-sh-pair" && chmod 755 "$BIN/a-sh-pair"
+fi
+say "Installed a-sh-pair to $BIN"
+
+# Daily automatic updates (systemd user timer): herdr when it's the
+# installer-managed copy, and a-sh-pair itself. Runs while logged out too
+# once lingering is on, so the computer stays current without a visit.
+cat > "$BIN/a-sh-home-update" <<'UPD'
+#!/bin/bash
+# Daily update run by a-sh-home-update.timer (installed by A-SH's setup-home).
+set -u
+BIN=$HOME/.local/bin
+if [ -x "$BIN/herdr" ]; then
+	"$BIN/herdr" update || echo "herdr update failed" >&2
+fi
+tmp=$(mktemp)
+if curl -fsSL https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools/a-sh-pair -o "$tmp" &&
+	head -1 "$tmp" | grep -q '^#!/bin/bash'; then
+	install -m 755 "$tmp" "$BIN/a-sh-pair"
+fi
+rm -f "$tmp"
+UPD
+chmod 755 "$BIN/a-sh-home-update"
+unit_dir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
+mkdir -p "$unit_dir"
+cat > "$unit_dir/a-sh-home-update.service" <<UNIT
+[Unit]
+Description=A-SH home updates (herdr, a-sh-pair)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$BIN/a-sh-home-update
+UNIT
+cat > "$unit_dir/a-sh-home-update.timer" <<'UNIT'
+[Unit]
+Description=Daily A-SH home updates
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl --user daemon-reload
+systemctl --user enable --now a-sh-home-update.timer >/dev/null
+loginctl enable-linger "$USER" 2>/dev/null || true
+say "Automatic daily updates enabled (systemctl --user list-timers)"
+case ":$PATH:" in *":$BIN:"*) ;; *) say "Add $BIN to your PATH to run a-sh-pair later" ;; esac
+
+say "On the phone: install Tailscale, sign in, then scan this with the camera"
+exec "$BIN/a-sh-pair"

@@ -5,7 +5,9 @@ plugins {
 def versionMajor = 0
 def versionMinor = 8
 def versionPatch = 0
-def versionBuild = 0
+// CI passes -PbuildNumber=<run number>: every main build is a distinct,
+// increasing versionCode, which AppUpdater compares against release tags.
+def versionBuild = (project.findProperty("buildNumber") ?: "0").toString().toInteger()
 
 android {
     namespace "io.github.sylirre.terminal"
@@ -18,12 +20,31 @@ android {
         // only supports since API 29.
         minSdk 29
         targetSdk 36
-        versionCode versionMajor * 1000000 + versionMinor * 1000 + versionPatch * 10 + versionBuild
+        versionCode((versionMajor * 1000000 + versionMinor * 1000 + versionPatch * 10) * 1000 + versionBuild)
         versionName "${versionMajor}.${versionMinor}.${versionPatch}"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Matches the ABIs we ship prebuilt libghostty-vt.a for.
         ndk {
             abiFilters "arm64-v8a", "x86_64"
+        }
+    }
+
+    // Release APKs must all carry one key, or self-updates are rejected. CI
+    // gets it from repository secrets; without them release stays unsigned.
+    signingConfigs {
+        release {
+            def ks = System.getenv("A_SH_KEYSTORE")
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv("A_SH_KEYSTORE_PASSWORD")
+                keyAlias "a-sh"
+                keyPassword System.getenv("A_SH_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (System.getenv("A_SH_KEYSTORE")) signingConfig signingConfigs.release
         }
     }
 

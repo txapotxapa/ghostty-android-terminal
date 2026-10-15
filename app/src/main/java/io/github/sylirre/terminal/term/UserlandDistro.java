@@ -30,7 +30,7 @@ public final class UserlandDistro {
     private static final String SUFFIX = "_aarch64_rootfs.tar.xz";
 
     /** Chooser/display order for the ids we ship; unknown ids sort after, alphabetically. */
-    private static final List<String> KNOWN_ORDER = Arrays.asList("alpine", "debian");
+    private static final List<String> KNOWN_ORDER = Arrays.asList("alpine", "omarchy", "debian");
 
     /** Distribution id — the file-name token before the first underscore, e.g. "alpine". */
     public final String id;

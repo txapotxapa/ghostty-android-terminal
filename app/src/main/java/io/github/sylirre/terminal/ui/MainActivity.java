@@ -107,6 +107,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private long lastClipToastUptime;
     private ExtraKeysView extraKeys;
     private TerminalSession current;
+    /** A QR pairing link that arrived before a tab could be opened for it. */
+    private String pendingSshLink;
     private AppSettings settings;
     private ThemeStore themeStore;
     private ExtraKeysConfig extraKeysConfig;
@@ -136,6 +138,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         terminal = findViewById(R.id.terminal);
         tabs = findViewById(R.id.tabs);
         forceShell = getIntent().getBooleanExtra(EXTRA_FORCE_SHELL, false);
+        pendingSshLink = SshLinks.fromIntent(getIntent());
         extraKeys = findViewById(R.id.extra_keys);
         extraKeys.attachTerminal(terminal);
         mainTopBar = findViewById(R.id.main_top_bar);
@@ -297,8 +300,22 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String link = SshLinks.fromIntent(intent);
+        if (link == null) return;
+        // singleTask: a scan while the app runs lands here. Before the first
+        // tab exists (layout or onboarding still pending) it waits for
+        // createFirstSession instead.
+        if (awaitingOnboarding || sessions.isEmpty()) pendingSshLink = link;
+        else openSshPairingTab(link);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        AppUpdater.maybeCheck(this, sessions.isEmpty());
         // Re-apply the whole settings surface: edits made in SettingsActivity /
         // ThemeActivity / ExtraKeysActivity only persist to the stores, so
         // returning here is what pushes them to the live terminal, window and
@@ -475,7 +492,73 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
      */
     private void createFirstSession() {
         if (awaitingOnboarding) return;
+        if (pendingSshLink != null) {
+            String link = pendingSshLink;
+            pendingSshLink = null;
+            openSshPairingTab(link);
+            if (!sessions.isEmpty()) return;
+        }
         createSession(userlandByDefault());
+    }
+
+    // --- QR SSH pairing (tools/a-sh-pair on the home computer) --------------
+
+    /**
+     * New userland tab running the a-sh-ssh helper on a pairing link: it
+     * pairs a key, saves {@code ssh <name>} and connects. Typed into the PTY
+     * right after spawn — the tty buffers it until the login shell reads.
+     */
+    private void openSshPairingTab(String link) {
+        if (!userlandByDefault()) {
+            pendingSshLink = link;
+            Toast.makeText(this, R.string.toast_ssh_needs_linux, Toast.LENGTH_LONG).show();
+            if (!UserlandRootfs.isInstalled(this) && UserlandRootfs.assetAvailable(this)) {
+                startOnboardingSetup();
+            }
+            return;
+        }
+        try {
+            SshLinks.installHelper(this);
+        } catch (IOException e) {
+            Toast.makeText(this, getString(R.string.toast_ssh_helper_failed, e.getMessage()),
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        createSession(true);
+        if (current != null && current.isUserland()) {
+            current.write(SshLinks.pairCommand(link));
+            SshLinks.saveHost(this, SshLinks.hostName(link));
+        }
+    }
+
+    /** New userland tab connected to a host paired earlier. */
+    private void openSshTab(String name) {
+        createSession(true);
+        if (current != null && current.isUserland()) {
+            current.write(SshLinks.connectCommand(name));
+        }
+    }
+
+    /** Fallback for cameras that won't open ash:// links: paste the printed link. */
+    private void pastePairingLink() {
+        ClipboardManager cm = getSystemService(ClipboardManager.class);
+        ClipData clip = cm == null ? null : cm.getPrimaryClip();
+        CharSequence text = clip == null || clip.getItemCount() == 0
+                ? null : clip.getItemAt(0).coerceToText(this);
+        String link = SshLinks.validate(text == null ? null : text.toString());
+        if (link == null) {
+            Toast.makeText(this, R.string.toast_ssh_no_link, Toast.LENGTH_LONG).show();
+            return;
+        }
+        openSshPairingTab(link);
+    }
+
+    private void confirmForgetSshHost(String name) {
+        new AlertDialog.Builder(this)
+                .setMessage(getString(R.string.ssh_forget_message, name))
+                .setPositiveButton(R.string.ssh_forget, (d, w) -> SshLinks.forgetHost(this, name))
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
     }
 
     private void createSession(boolean userland) {
@@ -541,6 +624,25 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             // it holds the user's data and is not wiped behind their back.
             labels.add(getString(R.string.session_type_install_linux));
             actions.add(this::startOnboardingSetup);
+        }
+
+        if (userlandByDefault()) {
+            for (String host : SshLinks.savedHosts(this)) {
+                labels.add(getString(R.string.session_type_ssh, host));
+                actions.add(() -> openSshTab(host));
+            }
+        }
+        labels.add(getString(R.string.session_type_ssh_paste));
+        actions.add(this::pastePairingLink);
+        List<String> savedHosts = SshLinks.savedHosts(this);
+        if (!savedHosts.isEmpty()) {
+            labels.add(getString(R.string.session_type_ssh_forget));
+            actions.add(() -> new AlertDialog.Builder(this)
+                    .setTitle(R.string.session_type_ssh_forget)
+                    .setItems(savedHosts.toArray(new String[0]),
+                            (d, which) -> confirmForgetSshHost(savedHosts.get(which)))
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .show());
         }
 
         labels.add(getString(R.string.session_type_shell));
@@ -919,8 +1021,15 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 // launch) but still gets a shell for this run.
                 if (terminal.getWidth() > 0) createFirstSession();
             } else if (resultCode == RESULT_OK && UserlandRootfs.isUsable(this)) {
-                // Setup-only mode: open a tab into the fresh userland.
-                createSession(true);
+                // Setup-only mode: open a tab into the fresh userland — or
+                // resume the SSH pairing that asked for the setup.
+                if (pendingSshLink != null) {
+                    String link = pendingSshLink;
+                    pendingSshLink = null;
+                    openSshPairingTab(link);
+                } else {
+                    createSession(true);
+                }
             }
             return;
         }

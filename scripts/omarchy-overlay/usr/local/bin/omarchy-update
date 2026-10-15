@@ -1,0 +1,37 @@
+#!/bin/bash
+# Full system update for the Omarchy userland.
+#   omarchy-update         interactive, shows pacman's output
+#   omarchy-update --auto  quiet background run from /etc/profile.d/omarchy.sh;
+#                          the result is shown at the next login
+set -u
+STAMP=/var/lib/omarchy/last-update
+LOG=/var/log/omarchy-update.log
+NOTICE=/var/log/omarchy-update.notice
+LOCK=/var/lib/pacman/db.lck
+mkdir -p /var/lib/omarchy
+
+if [ "$(id -u)" != 0 ]; then
+	exec sudo "$0" "$@"
+fi
+
+# A run killed mid-transaction (tab closed, app stopped) leaves pacman's lock
+# behind; clear it only when no pacman is actually running.
+if [ -e "$LOCK" ] && ! pgrep -x pacman >/dev/null; then
+	rm -f "$LOCK"
+fi
+
+if [ "${1:-}" = --auto ]; then
+	exec 9>/var/lib/omarchy/update.lock
+	flock -n 9 || exit 0
+	touch "$STAMP"   # throttle even if this run fails (offline, mirror down)
+	before=$(pacman -Q | md5sum)
+	if pacman -Syu --noconfirm >"$LOG" 2>&1; then
+		[ "$before" != "$(pacman -Q | md5sum)" ] &&
+			echo "Omarchy: system updated in the background (log: $LOG)" >"$NOTICE"
+	else
+		echo "Omarchy: background update failed — run 'omarchy-update' to see why" >"$NOTICE"
+	fi
+	exit 0
+fi
+
+pacman -Syu "$@" && touch "$STAMP"
