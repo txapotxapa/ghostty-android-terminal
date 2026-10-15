@@ -74,9 +74,13 @@ final class SshLinks {
         return Uri.parse(link).getQueryParameter("n");
     }
 
-    /** Shell line that pairs and connects; {@code link} must come from {@link #validate}. */
+    /**
+     * Shell line that pairs and connects; {@code link} must come from
+     * {@link #validate}. The leading space keeps the one-time token out of
+     * history (HISTCONTROL=ignoreboth) and {@code clear} wipes the echo of it.
+     */
     static String pairCommand(String link) {
-        return "a-sh-ssh '" + link + "'\r";
+        return " clear; a-sh-ssh '" + link + "'\r";
     }
 
     /** Shell line for a saved host; {@code name} must come from {@link #savedHosts}. */
