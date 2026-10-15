@@ -39,9 +39,10 @@ import io.github.sylirre.terminal.R;
  * CI publishes every main-branch build as a release tagged
  * {@code a-sh-qr-pair_v<major>.<minor>.<build>} carrying the signed APK. On resume, at most
  * every few hours, this checks the latest release; a newer build is
- * downloaded in the background. Installing restarts the app — which ends
- * running shells — so a ready update is installed straight away only when no
- * tab is open (a fresh launch), and otherwise offered in a dialog.
+ * downloaded in the background (checks at most every 15 minutes, on resume).
+ * Installing restarts the app — which ends running shells — so a ready update
+ * is installed straight away only when no tab is open (a fresh launch), and
+ * otherwise offered in a dialog.
  *
  * The install goes through a {@link PackageInstaller} session that asks for no
  * user action: Android 12+ honours that once A-SH is the installer of record
@@ -55,11 +56,12 @@ final class AppUpdater {
     private static final String KEY_LAST_CHECK = "last_check";
     private static final String KEY_READY_CODE = "ready_code";
     private static final String KEY_READY_NAME = "ready_name";
-    private static final long CHECK_INTERVAL_MS = 6L * 60 * 60 * 1000;
+    private static final long CHECK_INTERVAL_MS = 15L * 60 * 1000;
     private static final String APK_NAME = "update.apk";
 
     private static boolean busy;
-    private static boolean offeredThisProcess;
+    /** versionCode last offered in a dialog; re-offered only after a restart. */
+    private static long offeredCode;
 
     private AppUpdater() {}
 
@@ -82,7 +84,7 @@ final class AppUpdater {
         long ready = prefs.getLong(KEY_READY_CODE, 0);
         if (ready > installed && apkFile(app).isFile()) {
             if (idle) install(app);
-            else offerInstall(activity, prefs.getString(KEY_READY_NAME, ""));
+            else offerInstall(activity, ready, prefs.getString(KEY_READY_NAME, ""));
             return;
         }
 
@@ -140,9 +142,11 @@ final class AppUpdater {
         Log.i(TAG, "update " + info.getLongVersionCode() + " downloaded");
     }
 
-    private static void offerInstall(Activity activity, String name) {
-        if (offeredThisProcess || activity.isFinishing()) return;
-        offeredThisProcess = true;
+    private static void offerInstall(Activity activity, long code, String name) {
+        // Once per downloaded build per app run: "Next launch" isn't nagged
+        // again on every resume, but a newer build is offered right away.
+        if (offeredCode == code || activity.isFinishing()) return;
+        offeredCode = code;
         new AlertDialog.Builder(activity)
                 .setTitle(R.string.update_ready_title)
                 .setMessage(activity.getString(R.string.update_ready_message, name))

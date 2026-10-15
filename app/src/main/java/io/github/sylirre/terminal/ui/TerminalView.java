@@ -245,11 +245,15 @@ public class TerminalView extends View {
     private boolean mouseTrackingEnabled = true;
     private int mouseAxis;
     private float mouseWheelRemainder;
-    // A long-press with mouse reporting active holds the left button down and
-    // turns subsequent movement into drag (motion-with-button) reports, ending
-    // on finger-up. mouseDragCellX/Y is the last cell a motion was reported for,
-    // so a drag within one cell isn't re-reported (the protocol is cell-grained).
+    // A long-press with mouse reporting active is a right-click if the finger
+    // lifts where it pressed (context menus: herdr, mc, …), or a left-button
+    // drag once it moves to another cell (dividers, sliders, region select).
+    // The left press is deferred until that first move, so a plain long-press
+    // never sends one. mouseDragCellX/Y is the last cell a motion was reported
+    // for, so a drag within one cell isn't re-reported (cell-grained protocol).
     private boolean mouseDragging;
+    private boolean mouseDragPressed;
+    private float mouseDragStartX, mouseDragStartY;
     private int mouseDragCellX = -1, mouseDragCellY = -1;
 
     // --- OSC 8 hyperlinks. When enabled, cells carrying a hyperlink are drawn
@@ -408,10 +412,9 @@ public class TerminalView extends View {
 
             @Override
             public void onLongPress(MotionEvent e) {
-                // With mouse reporting active, a long-press grabs the left
-                // button so the following drag is reported to the program
-                // (text/region select, slider, divider) instead of starting a
-                // local copy selection.
+                // With mouse reporting active, a long-press is a right-click
+                // (lift in place) or a left drag (move), reported to the
+                // program instead of starting a local copy selection.
                 if (mouseReporting()) {
                     startMouseDrag(e.getX(), e.getY());
                     return;
@@ -730,20 +733,21 @@ public class TerminalView extends View {
     }
 
     /**
-     * Begins a left-button drag at the long-press point: presses the button
-     * (held) and records the start cell. {@link #mouseDragTouch} then carries
-     * the motion and release. A short haptic marks the grab, mirroring the
+     * Arms a long-press at the given pixel: records the start cell without
+     * sending anything yet. {@link #mouseDragTouch} then decides — a move to
+     * another cell presses the left button there and drags; a lift in place
+     * sends a right-click. A short haptic marks the long-press, mirroring the
      * feedback the local selection gives.
      */
     private void startMouseDrag(float px, float py) {
         float x = px - textMarginLeft, y = py;
         mouseDragging = true;
+        mouseDragPressed = false;
+        mouseDragStartX = x;
+        mouseDragStartY = y;
         mouseDragCellX = (int) (x / cellWidth);
         mouseDragCellY = (int) (y / cellHeight);
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        byte[] press = session.emulator.encodeMouse(
-                TerminalNative.MOUSE_PRESS, TerminalNative.MOUSE_BUTTON_LEFT, x, y, true);
-        if (press != null) session.writeBytes(press);
     }
 
     /**
@@ -763,6 +767,14 @@ public class TerminalView extends View {
                 if (cx == mouseDragCellX && cy == mouseDragCellY) return true;
                 mouseDragCellX = cx;
                 mouseDragCellY = cy;
+                if (!mouseDragPressed) {
+                    // First move off the start cell: it's a drag after all.
+                    mouseDragPressed = true;
+                    byte[] press = session.emulator.encodeMouse(
+                            TerminalNative.MOUSE_PRESS, TerminalNative.MOUSE_BUTTON_LEFT,
+                            mouseDragStartX, mouseDragStartY, true);
+                    if (press != null) session.writeBytes(press);
+                }
                 byte[] motion = session.emulator.encodeMouse(
                         TerminalNative.MOUSE_MOTION, TerminalNative.MOUSE_BUTTON_LEFT,
                         x, y, true);
@@ -771,11 +783,25 @@ public class TerminalView extends View {
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL: {
-                byte[] release = session.emulator.encodeMouse(
-                        TerminalNative.MOUSE_RELEASE, TerminalNative.MOUSE_BUTTON_LEFT,
-                        x, y, false);
-                if (release != null) session.writeBytes(release);
+                if (mouseDragPressed) {
+                    byte[] release = session.emulator.encodeMouse(
+                            TerminalNative.MOUSE_RELEASE, TerminalNative.MOUSE_BUTTON_LEFT,
+                            x, y, false);
+                    if (release != null) session.writeBytes(release);
+                } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                    // Held in place and lifted: the touch stand-in for a
+                    // right-click, which opens the program's context menu.
+                    byte[] press = session.emulator.encodeMouse(
+                            TerminalNative.MOUSE_PRESS, TerminalNative.MOUSE_BUTTON_RIGHT,
+                            mouseDragStartX, mouseDragStartY, false);
+                    byte[] release = session.emulator.encodeMouse(
+                            TerminalNative.MOUSE_RELEASE, TerminalNative.MOUSE_BUTTON_RIGHT,
+                            mouseDragStartX, mouseDragStartY, false);
+                    if (press != null) session.writeBytes(press);
+                    if (release != null) session.writeBytes(release);
+                }
                 mouseDragging = false;
+                mouseDragPressed = false;
                 mouseDragCellX = mouseDragCellY = -1;
                 return true;
             }
