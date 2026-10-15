@@ -42,6 +42,10 @@ if [ "$(id -u)" != 0 ]; then
 	exec unshare --map-auto --map-root-user --mount --fork -- "$0" "$@"
 fi
 
+# A container sees the host kernel's handlers once binfmt_misc is mounted.
+if [ ! -e /proc/sys/fs/binfmt_misc/status ]; then
+	mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null || true
+fi
 if [ ! -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ] && [ "$(uname -m)" != aarch64 ]; then
 	echo "error: no aarch64 binfmt handler (install qemu-user-static-binfmt)" >&2
 	exit 1
