@@ -71,6 +71,11 @@ final class AppUpdater {
         Context app = activity.getApplicationContext();
         String repo = app.getString(R.string.update_repo);
         if (repo.isEmpty() || busy) return;
+        // Debug builds carry the debug key, so a release APK can't replace
+        // them anyway — and the instrumented tests must never meet a system
+        // install prompt mid-run.
+        if ((app.getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) return;
         SharedPreferences prefs = prefs(app);
         long installed = installedVersionCode(app);
 
@@ -194,12 +199,19 @@ final class AppUpdater {
             } else if (status != PackageInstaller.STATUS_SUCCESS) {
                 String msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
                 Log.w(TAG, "install status " + status + ": " + msg);
-                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(ctx,
-                        ctx.getString(R.string.update_failed, msg), Toast.LENGTH_LONG).show());
-                // A rejected APK (e.g. signed by another key) must not be
-                // retried on every launch; the next check fetches afresh.
-                apkFile(ctx).delete();
-                prefs(ctx).edit().remove(KEY_READY_CODE).apply();
+                if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
+                    new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(ctx,
+                            ctx.getString(R.string.update_failed, msg), Toast.LENGTH_LONG).show());
+                }
+                // Backing out of the prompt (or of the one-time "install
+                // unknown apps" permission) keeps the download: the next
+                // fresh launch offers it again. A rejected APK (e.g. signed
+                // by another key) must not be retried on every launch; the
+                // next check fetches afresh.
+                if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
+                    apkFile(ctx).delete();
+                    prefs(ctx).edit().remove(KEY_READY_CODE).apply();
+                }
             }
         }
     }
