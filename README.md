@@ -1,26 +1,51 @@
 # A-SH: phone → home computer, in one scan
 
-This fork turns A-SH into a pocket terminal for your own computer:
+This fork turns A-SH into a pocket terminal for your own computer. Set up the
+phone first: the QR code from step 2 expires after 5 minutes.
 
-1. **On the computer** (Omarchy/Arch, Debian/Ubuntu or Fedora), paste one command:
+### 1. Phone (Android 10+, 64-bit)
 
-   ```sh
-   bash <(curl -fsSL https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools/setup-home)
-   ```
+1. Install **Tailscale** from the Play Store, open it, sign in, and switch it on.
+2. On the phone, open the [latest release](https://github.com/txapotxapa/ghostty-android-terminal/releases/latest)
+   and tap the `.apk` file under **Assets** (e.g. `A-SH_build-8000002.apk`, ~130 MB).
+3. Open the download. If Android blocks it, tap **Settings**, allow
+   **Install unknown apps** for your browser, go back, and tap **Install**.
+4. Open **A-SH** → **Continue** → leave **Omarchy** selected → **Install Omarchy**
+   (about a minute) → **Start**. Allow notifications and background running when asked,
+   so sessions survive with the screen off.
 
-   It installs and enables Tailscale, the SSH server and [herdr](https://herdr.dev),
-   turns on daily automatic updates, and shows a QR code.
-2. **On the phone**: install [Tailscale](https://tailscale.com/download/android) (same
-   account) and the A-SH APK from [Releases](../../releases), pick **Omarchy** on first
-   run, then scan the QR with the camera.
+You're at an Omarchy prompt (`~ ❯`).
 
-You land in herdr on your computer. Afterwards, long-press **+** → **SSH → <computer>**
-reconnects in one tap (`ssh <computer>-sh` for a plain shell). Need a new phone or a
-fresh code? Run `a-sh-pair` on the computer.
+### 2. Computer (Omarchy/Arch, Debian/Ubuntu or Fedora)
 
-Automatic updates: the app updates itself from Releases (the first update asks once),
-Omarchy runs a daily background `pacman -Syu`, and the computer updates herdr and
-`a-sh-pair` daily.
+Paste this into a terminal and enter your password when asked:
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools/setup-home)
+```
+
+It installs and switches on Tailscale (sign in with the **same account** as the
+phone if it asks), the SSH server and [herdr](https://herdr.dev), turns on daily
+automatic updates, then shows a QR code.
+
+### 3. Connect
+
+Point the phone's **camera app** at the QR and tap the link it offers. A-SH opens
+a new tab, pairs, and you land in herdr on your computer.
+
+If the camera doesn't offer to open it, copy the `ash://…` link printed under the
+QR to the phone (e.g. any messaging app), then in A-SH **long-press +** →
+**Paste pairing link**.
+
+### After that
+
+- Reconnect: **long-press +** → **SSH → <computer name>**. Or type `ssh <computer name>`
+  (herdr) or `ssh <computer name>-sh` (a plain shell) in any A-SH tab.
+- New phone, or reset the pairing: run `a-sh-pair` on the computer and scan again.
+- Updates are automatic. The app updates itself from Releases: the first update
+  asks you to confirm once, and later ones install the next time you open the app
+  with no tabs running. Omarchy runs a daily background `pacman -Syu`, and the
+  computer updates herdr and `a-sh-pair` daily.
 
 ---
 
