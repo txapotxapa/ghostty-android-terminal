@@ -160,7 +160,7 @@ public final class OnboardingActivity extends Activity {
 
         buildChooserCards();
         // The suggested starting point is the first bundled distro — the list
-        // is sorted alpine-first (small, fast to install) — else shell-only.
+        // is sorted omarchy-first (the A-SH default) — else shell-only.
         selected = distros.isEmpty() ? null : distros.get(0);
         refreshCards();
 

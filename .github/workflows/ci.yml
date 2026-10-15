@@ -23,18 +23,20 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Setup mmdebstrap
+      # Omarchy (Arch Linux ARM) replaces Debian in the published APK
+      # (scripts/build-debian-rootfs.sh still works for a local build).
+      # pacstrap needs pacman, so the script runs in the Arch container;
+      # qemu binfmt (F flag) runs the aarch64 package scriptlets.
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build Omarchy rootfs
         run: |
-          sudo apt update
-          sudo apt install -yq curl binfmt-support qemu-user-static
-
-          curl -L -o /tmp/mmdebstrap.deb http://ftp.us.debian.org/debian/pool/main/m/mmdebstrap/mmdebstrap_1.5.7-3_all.deb
-          curl -L -o /tmp/keyring.deb http://ftp.us.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2025.1_all.deb
-
-          sudo apt install -yq /tmp/mmdebstrap.deb /tmp/keyring.deb
-
-      - name: Build Debian rootfs
-        run: ./scripts/build-debian-rootfs.sh
+          docker run --rm --privileged -v "$PWD:/w" -w /w archlinux:latest bash -c '
+            pacman -Sy --noconfirm --needed curl xz libarchive >/dev/null &&
+            ./scripts/build-omarchy-rootfs.sh &&
+            chown -R '"$(id -u):$(id -g)"' UserlandRootfs'
 
       # Needs only curl + xz (preinstalled on the runner); the published APK
       # then bundles both distros for the onboarding chooser.
@@ -44,7 +46,27 @@ jobs:
       # ndkVersion from app/build.gradle is auto-installed by AGP via
       # sdkmanager (licenses are pre-accepted on hosted runners).
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug
+        run: ./gradlew :app:assembleDebug -PbuildNumber=${{ github.run_number }}
+
+      # Signed release APK for self-updates (AppUpdater). Needs the
+      # A_SH_KEYSTORE_B64 / A_SH_KEYSTORE_PASSWORD repository secrets.
+      - name: Build signed release APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          KEYSTORE_B64: ${{ secrets.A_SH_KEYSTORE_B64 }}
+          A_SH_KEYSTORE_PASSWORD: ${{ secrets.A_SH_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "no signing secrets; skipping"; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/a-sh.jks"
+          A_SH_KEYSTORE="$RUNNER_TEMP/a-sh.jks" ./gradlew :app:assembleRelease -PbuildNumber=${{ github.run_number }}
+          rm -f "$RUNNER_TEMP/a-sh.jks"
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
@@ -127,3 +149,35 @@ jobs:
         with:
           files: "*.apk"
           generate_release_notes: true
+
+  # Every main build becomes a release tagged build-<versionCode>; installed
+  # apps pick it up automatically (AppUpdater). Not gated on the emulator
+  # suite, which is slow and flaky on hosted runners; tag releases above are.
+  publish-update:
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release APK
+        id: apk
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: app-release
+
+      - name: Publish update release
+        if: steps.apk.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=$(ls *.apk | head -n1)
+          # Must match app/build.gradle's versionCode formula.
+          set -- $(echo "$apk" | sed -E 's/.*_v([0-9]+)\.([0-9]+)\.([0-9]+)\.apk/\1 \2 \3/')
+          code=$(( ($1 * 1000000 + $2 * 1000 + $3 * 10) * 1000 + ${{ github.run_number }} ))
+          mv "$apk" "A-SH_build-${code}.apk"
+          gh release create "build-${code}" "A-SH_build-${code}.apk" \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "A-SH $1.$2.$3 (build ${{ github.run_number }})" \
+            --notes "Automatic build of ${{ github.sha }}." --latest
