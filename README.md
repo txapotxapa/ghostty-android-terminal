@@ -1,3 +1,29 @@
+# A-SH: phone → home computer, in one scan
+
+This fork turns A-SH into a pocket terminal for your own computer:
+
+1. **On the computer** (Omarchy/Arch, Debian/Ubuntu or Fedora), paste one command:
+
+   ```sh
+   bash <(curl -fsSL https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools/setup-home)
+   ```
+
+   It installs and enables Tailscale, the SSH server and [herdr](https://herdr.dev),
+   turns on daily automatic updates, and shows a QR code.
+2. **On the phone**: install [Tailscale](https://tailscale.com/download/android) (same
+   account) and the A-SH APK from [Releases](../../releases), pick **Omarchy** on first
+   run, then scan the QR with the camera.
+
+You land in herdr on your computer. Afterwards, long-press **+** → **SSH → <computer>**
+reconnects in one tap (`ssh <computer>-sh` for a plain shell). Need a new phone or a
+fresh code? Run `a-sh-pair` on the computer.
+
+Automatic updates: the app updates itself from Releases (the first update asks once),
+Omarchy runs a daily background `pacman -Syu`, and the computer updates herdr and
+`a-sh-pair` daily.
+
+---
+
 # Terminal
 
 Probably the first ever [Ghostty-based](https://github.com/ghostty-org/ghostty)
