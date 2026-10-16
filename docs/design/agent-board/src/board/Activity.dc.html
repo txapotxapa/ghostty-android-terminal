@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Activity</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7FD1B9}a:hover{color:#A8E3D1}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #121314; color: #ECECEA; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="padding: 22px 16px 12px; display: flex; flex-direction: column; gap: 12px">
+    <div style="font-size: 26px; font-weight: 600; letter-spacing: -0.01em">Activity</div>
+    <div style="display: flex; gap: 6px; overflow: hidden">
+      <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 0; background: #2E3034; font-size: 13px; white-space: nowrap">All</button>
+      <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #2A2C30; background: transparent; color: #B3B4B0; font-size: 13px; white-space: nowrap">Needs you · 1</button>
+      <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #2A2C30; background: transparent; color: #B3B4B0; font-size: 13px; white-space: nowrap">Errors</button>
+      <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #2A2C30; background: transparent; color: #B3B4B0; font-size: 13px; white-space: nowrap">Commits</button>
+    </div>
+  </header>
+
+  <main style="flex: 1; overflow: hidden; padding: 0 16px; display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 12px; color: #9A9C9F; letter-spacing: 0.04em; padding: 6px 0">TODAY</div>
+    <sc-for list="{{events}}" as="e" hint-placeholder-count="7">
+      <div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #1F2124">
+        <span style="width: 34px; height: 34px; flex: none; border-radius: 10px; background: {{e.bg}}; color: {{e.fg}}; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 13px">{{e.icon}}</span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <div style="font-size: 14px; line-height: 1.35">{{e.text}}</div>
+          <div style="font-size: 12px; color: #9A9C9F; font-family: 'JetBrains Mono', monospace">{{e.meta}}</div>
+        </div>
+        <span style="font-size: 12px; color: #8C8E91; font-family: 'JetBrains Mono', monospace">{{e.t}}</span>
+      </div>
+    </sc-for>
+  </main>
+
+  <nav aria-label="Primary" style="display: flex; justify-content: space-around; padding: 10px 8px 22px; border-top: 1px solid #26282C">
+    <a href="/AgentBoard.dc.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #9A9C9F; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>Agents
+    </a>
+    <a href="Shell.dc.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #9A9C9F; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 8l4 4-4 4M12 17h7"></path></svg>Shell
+    </a>
+    <a href="Activity.dc.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #ECECEA; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>Activity
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ask = { bg: '#3A1E1A', fg: '#F3A397' };
+    const ok = { bg: '#15291F', fg: '#8FDCC2' };
+    const run = { bg: '#2E2615', fg: '#F0C674' };
+    const err = { bg: '#2A1A2E', fg: '#D9A6E8' };
+    const n = { bg: '#222428', fg: '#B3B4B0' };
+    return {
+      events: [
+        Object.assign({ icon: '?', text: 'omp is waiting to apply 2 file changes', meta: 'cvcn-storefront', t: '8:47' }, ask),
+        Object.assign({ icon: '✓', text: 'Claude Code committed a1f3c2e, 18 tests passed', meta: 'tuturnomd', t: '8:41' }, ok),
+        Object.assign({ icon: '▸', text: 'Hermes started reading the W42 lab log', meta: 'lab-notes', t: '8:39' }, run),
+        Object.assign({ icon: '!', text: 'bun run build failed, omp retried and fixed it', meta: 'cvcn-storefront · exit 1', t: '8:33' }, err),
+        Object.assign({ icon: '+', text: 'New agent: oh-my-pi in a worktree', meta: '~/cvcn-storefront', t: '8:30' }, n),
+        Object.assign({ icon: '⇄', text: 'Phone reconnected over Tailscale', meta: 'basement · 41 ms', t: '8:29' }, n),
+        Object.assign({ icon: '✓', text: 'Hermes finished the syntropic transcript batch', meta: 'syntropic-corpus · 6 files', t: '7:12' }, ok)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

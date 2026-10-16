@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7FD1B9}a:hover{color:#A8E3D1}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #121314; color: #ECECEA; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="padding: 16px 12px 10px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <a href="/AgentBoard.dc.html" aria-label="Back to agents" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ECECEA">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+      </a>
+      <span style="width: 34px; height: 34px; border-radius: 10px; background: #26282C; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px">omp</span>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+        <div style="font-size: 16px; font-weight: 600">oh-my-pi</div>
+        <div style="font-size: 12px; color: #9A9C9F; font-family: 'JetBrains Mono', monospace">cvcn-storefront · main</div>
+      </div>
+      <button aria-label="More" style="width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+      </button>
+    </div>
+    <div role="tablist" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: #1A1B1E; border-radius: 12px; padding: 4px">
+      <button onClick="{{t0}}" style="height: 36px; border-radius: 9px; border: 0; background: {{bg0}}; color: {{fg0}}; font-size: 13px">Chat</button>
+      <button onClick="{{t1}}" style="height: 36px; border-radius: 9px; border: 0; background: {{bg1}}; color: {{fg1}}; font-size: 13px">Trace</button>
+      <button onClick="{{t2}}" style="height: 36px; border-radius: 9px; border: 0; background: {{bg2}}; color: {{fg2}}; font-size: 13px">Terminal</button>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0 16px; border: 1px solid #26282C; border-radius: 12px; font-family: 'JetBrains Mono', monospace">
+    <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid #26282C"><span style="font-size: 10.5px; color: #9A9C9F">time</span><span style="font-size: 13px">4:12</span></div>
+    <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid #26282C"><span style="font-size: 10.5px; color: #9A9C9F">steps</span><span style="font-size: 13px">11</span></div>
+    <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid #26282C"><span style="font-size: 10.5px; color: #9A9C9F">files</span><span style="font-size: 13px">2</span></div>
+    <div style="padding: 8px 10px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 10.5px; color: #9A9C9F">tokens</span><span style="font-size: 13px">38k</span></div>
+  </div>
+
+  <main style="flex: 1; overflow: hidden; padding: 14px 16px 0">
+    <sc-if value="{{isChat}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <div style="align-self: flex-end; max-width: 82%; background: #24262A; border-radius: 18px 18px 6px 18px; padding: 11px 14px; font-size: 15px; line-height: 1.45">Add a Spanish toggle to the product page header and keep the cart icon aligned.</div>
+        <div style="font-size: 15px; line-height: 1.55">Added a LangToggle next to the cart in one flex row. Build passes. I need your OK to apply the 2 file changes.</div>
+      </div>
+    </sc-if>
+    <sc-if value="{{isTrace}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column">
+        <sc-for list="{{steps}}" as="s" hint-placeholder-count="7">
+          <div style="display: flex; gap: 12px">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 14px">
+              <span style="width: 10px; height: 10px; border-radius: 5px; background: {{s.color}}; margin-top: 5px"></span>
+              <span style="flex: 1; width: 1px; background: #2A2C30"></span>
+            </div>
+            <div style="flex: 1; min-width: 0; padding-bottom: 12px; display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; gap: 8px; align-items: baseline; font-family: 'JetBrains Mono', monospace; font-size: 12.5px">
+                <span style="color: {{s.color}}">{{s.tool}}</span>
+                <span style="flex: 1; min-width: 0; color: #D6D6D3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{s.arg}}</span>
+                <span style="color: #8C8E91; font-size: 11px">{{s.t}}</span>
+              </div>
+              <sc-if value="{{s.out}}" hint-placeholder-val="{{ false }}">
+                <div style="background: #0B0C0D; border: 1px solid #222428; border-radius: 8px; padding: 7px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #A9AAA6; white-space: pre; overflow: hidden; line-height: 1.5">{{s.out}}</div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{isTerm}}" hint-placeholder-val="{{ false }}">
+      <pre style="margin: 0; background: #0A0B0C; border-radius: 12px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.6; color: #C9CAC6; white-space: pre; overflow: hidden"><span style="color: #8FB7F0">❯</span> add a spanish toggle to the header
+<span style="color: #9A9C9F">● grep</span> CartIcon src/components
+<span style="color: #9A9C9F">● read</span> src/components/Header.tsx
+<span style="color: #E6B450">● edit</span> Header.tsx  +22 −6
+<span style="color: #E6B450">● write</span> LangToggle.tsx  +16
+<span style="color: #7FD1B9">● bash</span> bun run build
+  ✓ built in 3.8s
+Apply 2 file changes? [y/n] <span style="color: #E6B450">█</span></pre>
+    </sc-if>
+  </main>
+
+  <footer style="padding: 10px 12px 22px; display: flex; flex-direction: column; gap: 10px">
+    <a href="Approval.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: #2A1A17; border: 1px solid #5A332D; color: #ECECEA; text-decoration: none; min-height: 44px; box-sizing: border-box">
+      <span style="width: 8px; height: 8px; border-radius: 4px; background: #F07A6A"></span>
+      <span style="flex: 1; font-size: 14px">Waiting on you: apply 2 files</span>
+      <span style="font-size: 13px; color: #F3A397">Review</span>
+    </a>
+    <div style="display: flex; align-items: center; gap: 8px; background: #1B1C1F; border: 1px solid #2A2C30; border-radius: 24px; padding: 6px 6px 6px 16px">
+      <label for="msgd" style="position: absolute; width: 1px; height: 1px; overflow: hidden">Message</label>
+      <input id="msgd" placeholder="Steer omp…" style="flex: 1; min-width: 0; height: 44px; background: transparent; border: 0; color: #ECECEA; font: 15px 'IBM Plex Sans', sans-serif; outline: none">
+      <button aria-label="Dictate" style="width: 44px; height: 44px; border-radius: 22px; border: 0; background: #7FD1B9; color: #0E1412; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0014 0M12 18v3"></path></svg>
+      </button>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p){ super(p); this.state = { tab: 1 }; }
+  renderVals() {
+    const t = this.state.tab;
+    const on = (i) => t === i ? '#2E3034' : 'transparent';
+    const fg = (i) => t === i ? '#ECECEA' : '#9A9C9F';
+    return {
+      isChat: t === 0, isTrace: t === 1, isTerm: t === 2,
+      t0: () => this.setState({ tab: 0 }), t1: () => this.setState({ tab: 1 }), t2: () => this.setState({ tab: 2 }),
+      bg0: on(0), bg1: on(1), bg2: on(2), fg0: fg(0), fg1: fg(1), fg2: fg(2),
+      steps: [
+        { tool: 'plan', color: '#B9A4E8', arg: 'toggle beside cart, one flex row', t: '0:04', out: '' },
+        { tool: 'grep', color: '#8FB7F0', arg: 'CartIcon src/components', t: '0:09', out: 'Header.tsx:14  <CartIcon />' },
+        { tool: 'read', color: '#8FB7F0', arg: 'src/components/Header.tsx', t: '0:12', out: '' },
+        { tool: 'lsp', color: '#8FB7F0', arg: 'references useLang', t: '0:20', out: '3 refs in 2 files' },
+        { tool: 'edit', color: '#E6B450', arg: 'Header.tsx  +22 −6', t: '1:31', out: '' },
+        { tool: 'write', color: '#E6B450', arg: 'LangToggle.tsx  +16', t: '2:05', out: '' },
+        { tool: 'bash', color: '#7FD1B9', arg: 'bun run build', t: '4:02', out: '✓ 142 modules\n✓ built in 3.8s' },
+        { tool: 'ask', color: '#F07A6A', arg: 'apply 2 file changes?', t: '4:12', out: '' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

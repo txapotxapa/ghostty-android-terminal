@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shell tab</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7FD1B9}a:hover{color:#A8E3D1}
+button{font:inherit;color:inherit}
+</style>
+<style>html,body{background:#08090A}body>div{margin:0 auto}</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0B0C; color: #ECECEA; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 6px; padding: 16px 12px 8px; overflow: hidden">
+    <button style="height: 34px; padding: 0 12px; border-radius: 10px; border: 0; background: #1F2124; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 6px"><span style="width: 7px; height: 7px; border-radius: 4px; background: #7FD1B9"></span>basement</button>
+    <button style="height: 34px; padding: 0 12px; border-radius: 10px; border: 0; background: transparent; color: #9A9C9F; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">basement-sh</button>
+    <button style="height: 34px; padding: 0 12px; border-radius: 10px; border: 0; background: transparent; color: #9A9C9F; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">phone</button>
+    <span style="flex: 1"></span>
+    <button aria-label="New tab" style="width: 40px; height: 34px; border-radius: 10px; border: 1px solid #2A2C30; background: transparent; display: flex; align-items: center; justify-content: center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    </button>
+  </div>
+
+  <pre style="flex: 1; margin: 0; padding: 6px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; color: #C9CAC6; overflow: hidden; white-space: pre"><span style="color: #9A9C9F">herdr · 4 panes                     ⌁ 41ms</span>
+<span style="color: #9A9C9F">┌ 1 omp ─┬ 2 hermes ┬ 3 claude ┬ 4 sh ┐</span>
+
+<span style="color: #8FB7F0">~/agroforestry-planner</span> <span style="color: #9A9C9F">dev</span>
+<span style="color: #7FD1B9">❯</span> git status -sb
+## dev...origin/dev [ahead 2]
+ M src/planner/spacing.ts
+?? notes/cacao-shade.md
+
+<span style="color: #8FB7F0">~/agroforestry-planner</span> <span style="color: #9A9C9F">dev</span>
+<span style="color: #7FD1B9">❯</span> bun test spacing
+ ✓ spacing › 3x3 grid       <span style="color: #9A9C9F">2ms</span>
+ ✓ spacing › shade rows     <span style="color: #9A9C9F">1ms</span>
+ <span style="color: #7FD1B9">2 pass</span>  0 fail
+
+<span style="color: #8FB7F0">~/agroforestry-planner</span> <span style="color: #9A9C9F">dev</span>
+<span style="color: #7FD1B9">❯</span> <span style="background: #ECECEA; color: #0A0B0C"> </span></pre>
+
+  <div style="padding: 8px 10px; display: flex; gap: 6px; overflow: hidden; border-top: 1px solid #1E2023">
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">esc</button>
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">ctrl</button>
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">alt</button>
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">tab</button>
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">←</button>
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">→</button>
+    <button style="min-width: 44px; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">|</button>
+  </div>
+
+  <nav aria-label="Primary" style="display: flex; justify-content: space-around; padding: 10px 8px 22px; border-top: 1px solid #26282C; background: #121314">
+    <a href="AgentBoard.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #9A9C9F; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>Agents
+    </a>
+    <a href="Shell.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #ECECEA; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 8l4 4-4 4M12 17h7"></path></svg>Shell
+    </a>
+    <a href="Activity.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #9A9C9F; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>Activity
+    </a>
+  </nav>
+</div>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New agent</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7FD1B9}a:hover{color:#A8E3D1}
+button{font:inherit;color:inherit}
+</style>
+<style>html,body{background:#08090A}body>div{margin:0 auto}</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #121314; color: #ECECEA; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="display: flex; align-items: center; gap: 8px; padding: 16px 12px 6px">
+    <a href="AgentBoard.html" aria-label="Close" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ECECEA">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </a>
+    <div style="flex: 1; font-size: 17px; font-weight: 600">New agent</div>
+  </header>
+
+  <main style="flex: 1; overflow: hidden; padding: 8px 16px; display: flex; flex-direction: column; gap: 20px">
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 12px; color: #9A9C9F; letter-spacing: 0.04em">HARNESS</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        
+          <button style="min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid #7FD1B9; background: #1E2A26; text-align: left; display: flex; flex-direction: column; gap: 3px">
+            <span style="font-size: 14px; font-weight: 600">oh-my-pi</span>
+            <span style="font-size: 12px; color: #9A9C9F">coding, subagents</span>
+          </button>
+        
+          <button style="min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid #26282C; background: #1A1B1E; text-align: left; display: flex; flex-direction: column; gap: 3px">
+            <span style="font-size: 14px; font-weight: 600">Hermes</span>
+            <span style="font-size: 12px; color: #9A9C9F">skills, memory</span>
+          </button>
+        
+          <button style="min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid #26282C; background: #1A1B1E; text-align: left; display: flex; flex-direction: column; gap: 3px">
+            <span style="font-size: 14px; font-weight: 600">Claude Code</span>
+            <span style="font-size: 12px; color: #9A9C9F">stream-json trace</span>
+          </button>
+        
+          <button style="min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid #26282C; background: #1A1B1E; text-align: left; display: flex; flex-direction: column; gap: 3px">
+            <span style="font-size: 14px; font-weight: 600">Plain shell</span>
+            <span style="font-size: 12px; color: #9A9C9F">herdr pane</span>
+          </button>
+        
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 12px; color: #9A9C9F; letter-spacing: 0.04em">FOLDER</div>
+      <div style="background: #1A1B1E; border: 1px solid #26282C; border-radius: 14px; overflow: hidden">
+        
+          <button style="width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-bottom: 1px solid #222428; background: transparent; display: flex; align-items: center; gap: 10px; text-align: left">
+            <span style="flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px">~/cvcn-storefront</span>
+            <span style="font-size: 12px; color: #9A9C9F">main</span>
+            <span style="width: 18px; color: #7FD1B9">✓</span>
+          </button>
+        
+          <button style="width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-bottom: 1px solid #222428; background: transparent; display: flex; align-items: center; gap: 10px; text-align: left">
+            <span style="flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px">~/agroforestry-planner</span>
+            <span style="font-size: 12px; color: #9A9C9F">dev</span>
+            <span style="width: 18px; color: #7FD1B9"></span>
+          </button>
+        
+          <button style="width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-bottom: 1px solid #222428; background: transparent; display: flex; align-items: center; gap: 10px; text-align: left">
+            <span style="flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px">~/lab-notes</span>
+            <span style="font-size: 12px; color: #9A9C9F">main</span>
+            <span style="width: 18px; color: #7FD1B9"></span>
+          </button>
+        
+      </div>
+      <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px">
+        <input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #7FD1B9">
+        Run in its own git worktree
+      </label>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 12px; color: #9A9C9F; letter-spacing: 0.04em">FIRST PROMPT</div>
+      <label for="fp" style="position: absolute; width: 1px; height: 1px; overflow: hidden">First prompt</label>
+      <textarea id="fp" rows="3" placeholder="What should it work on? Hold the mic to dictate." style="background: #1A1B1E; border: 1px solid #26282C; border-radius: 14px; padding: 12px 14px; color: #ECECEA; font: 15px/1.45 'IBM Plex Sans', sans-serif; resize: none; outline: none"></textarea>
+      <div style="display: flex; gap: 8px">
+        <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #2A2C30; background: transparent; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #B3B4B0">model · default</button>
+        <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #2A2C30; background: transparent; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #B3B4B0">plan mode</button>
+      </div>
+    </div>
+  </main>
+
+  <footer style="padding: 10px 16px 22px; display: flex; gap: 8px">
+    <button aria-label="Dictate prompt" style="width: 52px; height: 52px; border-radius: 16px; border: 1px solid #2A2C30; background: #1F2124; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0014 0M12 18v3"></path></svg>
+    </button>
+    <a href="AgentDetail.html" style="flex: 1; height: 52px; border-radius: 16px; background: #7FD1B9; color: #0E1412; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-decoration: none">Start oh-my-pi in herdr</a>
+  </footer>
+</div>
+</body>
+</html>

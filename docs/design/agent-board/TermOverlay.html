@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal first, chat composer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7FD1B9}a:hover{color:#A8E3D1}
+button{font:inherit;color:inherit}
+</style>
+<style>html,body{background:#08090A}body>div{margin:0 auto}</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0B0C; color: #ECECEA; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 6px; padding: 16px 12px 8px; overflow: hidden">
+    <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 0; background: #1F2124; font-family: 'JetBrains Mono', monospace; font-size: 12px; display: flex; align-items: center; gap: 6px; white-space: nowrap">
+      <span style="width: 7px; height: 7px; border-radius: 4px; background: #E6B450"></span>omp
+    </button>
+    <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 0; background: transparent; color: #9A9C9F; font-family: 'JetBrains Mono', monospace; font-size: 12px; display: flex; align-items: center; gap: 6px; white-space: nowrap">
+      <span style="width: 7px; height: 7px; border-radius: 4px; background: #7FD1B9"></span>hermes
+    </button>
+    <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 0; background: transparent; color: #9A9C9F; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">sh</button>
+    <span style="flex: 1"></span>
+    <button aria-label="Toggle chat view" style="width: 44px; height: 34px; border-radius: 17px; border: 1px solid #2A2C30; background: transparent; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>
+    </button>
+  </div>
+
+  <pre style="flex: 1; margin: 0; padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.62; color: #C9CAC6; overflow: hidden; white-space: pre"><span style="color: #9A9C9F">─ omp ─────────────── cvcn-storefront ─</span>
+
+<span style="color: #8FB7F0">❯</span> add a spanish toggle to the header
+
+<span style="color: #9A9C9F">● grep</span> CartIcon src/components
+  src/components/Header.tsx:14
+<span style="color: #9A9C9F">● read</span> src/components/Header.tsx
+<span style="color: #E6B450">● edit</span> Header.tsx
+  <span style="color: #7FD1B9">+  &lt;LangToggle lang={lang} /&gt;</span>
+  <span style="color: #F07A6A">-  &lt;div className="ml-auto"&gt;</span>
+  <span style="color: #7FD1B9">+  &lt;div className="ml-auto flex gap-3"&gt;</span>
+<span style="color: #E6B450">● write</span> src/components/LangToggle.tsx
+<span style="color: #7FD1B9">● bash</span> bun run build
+  ✓ 142 modules  built in 3.8s
+
+Apply 2 file changes?</pre>
+
+  <div style="margin: 0 12px 10px; background: #1B1C1F; border: 1px solid #3A3220; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 14px">
+      <span style="width: 8px; height: 8px; border-radius: 4px; background: #E6B450"></span>
+      omp wants to apply 2 file changes
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <button style="height: 44px; border-radius: 12px; border: 0; background: #7FD1B9; color: #0E1412; font-weight: 600; font-size: 14px">Approve</button>
+      <button style="height: 44px; border-radius: 12px; border: 1px solid #2A2C30; background: #151618; font-size: 14px">Diff</button>
+      <button style="height: 44px; border-radius: 12px; border: 1px solid #2A2C30; background: #151618; font-size: 14px">Reject</button>
+    </div>
+  </div>
+
+  <div style="padding: 0 12px 22px; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; gap: 6px; overflow: hidden">
+      <button style="min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">esc</button>
+      <button style="min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">ctrl</button>
+      <button style="min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">tab</button>
+      <button style="min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">↑</button>
+      <button style="min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">/</button>
+      <button style="min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2A2C30; background: #151618; font-family: 'JetBrains Mono', monospace; font-size: 12px">@</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: #1B1C1F; border: 1px solid #2A2C30; border-radius: 24px; padding: 6px 6px 6px 16px">
+      <label for="msg4" style="position: absolute; width: 1px; height: 1px; overflow: hidden">Prompt</label>
+      <input id="msg4" placeholder="Type or hold mic, sent as one line" style="flex: 1; min-width: 0; height: 44px; background: transparent; border: 0; color: #ECECEA; font: 15px 'IBM Plex Sans', sans-serif; outline: none">
+      <button aria-label="Dictate" style="width: 44px; height: 44px; border-radius: 22px; border: 0; background: #7FD1B9; color: #0E1412; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0014 0M12 18v3"></path></svg>
+      </button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

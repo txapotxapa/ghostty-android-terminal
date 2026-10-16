@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>herdr agent board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7FD1B9}a:hover{color:#A8E3D1}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #121314; color: #ECECEA; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="padding: 22px 16px 14px; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <div style="font-size: 26px; font-weight: 600; letter-spacing: -0.01em">Agents</div>
+      <a href="board/NewAgent.dc.html" aria-label="New agent" style="width: 44px; height: 44px; border-radius: 22px; background: #7FD1B9; color: #0E1412; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      </a>
+    </div>
+    <a href="board/Pair.dc.html" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9A9C9F; text-decoration: none">basement · tailscale · 4 panes · 1 needs you ›</a>
+  </header>
+
+  <main style="flex: 1; overflow: hidden; padding: 0 16px; display: flex; flex-direction: column; gap: 12px">
+    <sc-for list="{{agents}}" as="a" hint-placeholder-count="4">
+      <a href="{{a.href}}" style="text-decoration: none; color: #ECECEA"><article style="background: #1A1B1E; border: 1px solid {{a.border}}; border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span style="width: 34px; height: 34px; border-radius: 10px; background: #26282C; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500">{{a.glyph}}</span>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+            <div style="font-size: 15px; font-weight: 600">{{a.name}}</div>
+            <div style="font-size: 12px; color: #9A9C9F; font-family: 'JetBrains Mono', monospace">{{a.repo}}</div>
+          </div>
+          <span style="font-size: 12px; padding: 4px 9px; border-radius: 10px; background: {{a.pillBg}}; color: {{a.pillFg}}">{{a.status}}</span>
+        </div>
+        <div style="background: #0B0C0D; border-radius: 10px; padding: 9px 11px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.55; color: #A9AAA6; white-space: pre; overflow: hidden">{{a.tail}}</div>
+        <div style="height: 3px; background: #26282C; border-radius: 2px; overflow: hidden">
+          <div style="width: {{a.pct}}; height: 3px; background: {{a.bar}}"></div>
+        </div>
+      </article></a>
+    </sc-for>
+  </main>
+
+  <nav aria-label="Primary" style="display: flex; justify-content: space-around; padding: 10px 8px 22px; border-top: 1px solid #26282C; margin-top: 12px">
+    <a href="AgentBoard.dc.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #ECECEA; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>Agents
+    </a>
+    <a href="board/Shell.dc.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #9A9C9F; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 8l4 4-4 4M12 17h7"></path></svg>Shell
+    </a>
+    <a href="board/Activity.dc.html" style="min-width: 64px; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #9A9C9F; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>Activity
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const amber = { pillBg: '#2E2615', pillFg: '#F0C674', bar: '#E6B450', border: '#26282C' };
+    const ask = { pillBg: '#3A1E1A', pillFg: '#F3A397', bar: '#F07A6A', border: '#5A332D' };
+    const done = { pillBg: '#15291F', pillFg: '#8FDCC2', bar: '#7FD1B9', border: '#26282C' };
+    const idle = { pillBg: '#222428', pillFg: '#B3B4B0', bar: '#3A3C41', border: '#26282C' };
+    return {
+      agents: [
+        Object.assign({ glyph: 'omp', name: 'oh-my-pi', repo: 'cvcn-storefront', status: 'Needs approval', href: 'board/AgentDetail.dc.html', pct: '70%', tail: 'edit  Header.tsx  +22 −6\n? apply 2 file changes [y/n]' }, ask),
+        Object.assign({ glyph: 'H', name: 'Hermes', repo: 'lab-notes', status: 'Running', href: 'board/AgentDetail.dc.html', pct: '45%', tail: 'tool  read_file autoclave.md\ntool  python  df.groupby("batch")' }, amber),
+        Object.assign({ glyph: 'cc', name: 'Claude Code', repo: 'tuturnomd', status: 'Done', href: 'board/AgentDetail.dc.html', pct: '100%', tail: '✓ 18 tests passed\n✓ committed a1f3c2e' }, done),
+        Object.assign({ glyph: '$', name: 'shell', repo: '~/agroforestry-planner', status: 'Idle', href: 'board/Shell.dc.html', pct: '0%', tail: '~/agroforestry-planner ❯' }, idle)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
