@@ -47,6 +47,7 @@ function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 function basename(p) { p = String(p || '').replace(/\/+$/, ''); return p.slice(p.lastIndexOf('/') + 1) || '/'; }
 
 const I = {
+  home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h4v-5h4v5h4v-9"/></svg>',
   plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>',
   grid: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
   shell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8l4 4-4 4M12 17h7"/></svg>',
@@ -153,6 +154,7 @@ async function herdr(host, ...args) {
 }
 
 window.ash = {
+  tab(t) { if (t === 'board' || t === 'activity') setTab(t); },
   onReply(host, id, rc, b) {
     const h = hosts.get(host); if (!h) return;
     const p = h.pending.get(id); if (!p) return;
@@ -713,11 +715,22 @@ function goBack() {
   return false;
 }
 function setTab(t) {
-  if (t === 'shell') { try { N.showShell(); } catch (e) {} return; }
+  if (t === 'shell') { try { N.shell(lastHerdrHost()); } catch (e) { try { N.showShell(); } catch (x) {} } return; }
   ui.tab = t; ui.stack = [{ v: t }]; ui.anim = null;
   if (t === 'activity') unseenNeeds = 0;
   render();
 }
+function lastHerdrHost() {
+  let h = ''; try { h = localStorage.getItem('ash.herdrHost') || ''; } catch (e) {}
+  return hosts.has(h) ? h : ([...hosts.values()].find((x) => x.state === 'online') || [...hosts.values()][0] || {}).name || '';
+}
+
+function openHerdr(h) {
+  try { localStorage.setItem('ash.herdrHost', h); } catch (e) {}
+  haptic();
+  try { N.herdr(h); } catch (e) { try { N.openTerminal(h, ''); } catch (x) {} }
+}
+
 function openDetail(key) {
   const g = agents.get(key); if (!g) return;
   const tab = hasLog(g) ? (g.status === 'blocked' ? 'trace' : 'chat') : 'screen';
@@ -785,17 +798,21 @@ function sortedAgents() {
   return [...agents.values()].sort((a, b) => (STATUS[a.status]?.rank ?? 9) - (STATUS[b.status]?.rank ?? 9) || (b.changed - a.changed));
 }
 
+// Home shows only live work: finished, idle and closed agents stay in Activity.
+const isLive = (g) => !g.gone && (g.status === 'working' || g.status === 'blocked');
+
 function viewBoard() {
-  const list = sortedAgents();
+  const all = sortedAgents();
+  const list = all.filter(isLive);
   const hs = [...hosts.values()];
   const needs = list.filter((g) => g.status === 'blocked' && !g.gone).length;
+  const working = list.filter((g) => g.status === 'working').length;
   let sub;
   if (!hs.length) sub = '<span class="live off"></span>no computers paired';
   else if (hs.length === 1) {
     const h = hs[0];
-    const panes = h.snap ? (h.snap.panes || []).length : 0;
     sub = `<span class="live ${h.state === 'online' ? '' : h.state === 'connecting' ? 'warn' : 'off'}"></span>` + esc([h.name, h.state === 'online' ? 'tailscale' : h.state === 'connecting' ? 'connecting…' : 'offline',
-      h.state === 'online' ? plural(panes, 'pane') : '', needs ? needs + (needs === 1 ? ' needs you' : ' need you') : ''].filter(Boolean).join(' · ')) + ' ›';
+      h.state === 'online' ? (working ? working + ' working' : needs ? '' : 'nothing running') : '', needs ? needs + (needs === 1 ? ' needs you' : ' need you') : ''].filter(Boolean).join(' · ')) + ' ›';
   } else {
     const on = hs.filter((h) => h.state === 'online').length;
     sub = `<span class="live ${on === hs.length ? '' : on ? 'warn' : 'off'}"></span>` + esc([on + '/' + hs.length + ' computers online', plural(list.length, 'agent'), needs ? needs + (needs === 1 ? ' needs you' : ' need you') : ''].filter(Boolean).join(' · ')) + ' ›';
@@ -805,17 +822,24 @@ function viewBoard() {
   else if (!list.length) {
     const connecting = hs.some((h) => h.state === 'connecting' || (h.state === 'online' && !h.snap));
     const offline = hs.every((h) => h.state === 'offline' || h.state === 'error');
-    if (connecting) body = '<div class="cards">' + '<div class="skel"></div>'.repeat(3) + '</div>';
+    if (connecting && !all.length) body = herdrRow(hs) + '<div class="cards">' + '<div class="skel"></div>'.repeat(2) + '</div>';
     else if (offline) body = `<div class="empty"><h3>Can't reach ${hs.length === 1 ? esc(hs[0].name) : 'your computers'}</h3><p>${esc(offlineReason(hs[0]))}</p><div class="row"><button class="btn" data-act="go" data-v="computers">${I.laptop} Computers</button><button class="btn primary" data-act="reconnect-all">${I.refresh} Retry</button></div></div>`;
-    else body = `<div class="empty"><h3>No agents running</h3><p>Start one here, or run an agent in herdr on your computer and it shows up on this board.</p><div class="row"><button class="btn primary" data-act="new">${I.plus} New agent</button></div></div>`;
+    else body = herdrRow(hs) + `<div class="empty quiet"><h3>Nothing running</h3><p>Agents show up here while they work or need you. Finished ones are in Activity.</p></div>`;
   } else {
-    body = '<div class="cards">' + list.map(card).join('') + otherPanes() + '</div>';
+    body = herdrRow(hs) + '<div class="cards">' + list.map(card).join('') + '</div>';
   }
   return `<header class="top"><div class="top-row"><div class="h1">Agents</div>
       <button class="fab" data-act="new" aria-label="New agent">${I.plus}</button></div>
       <button class="sub" data-act="go" data-v="computers" data-k="sub">${sub}</button></header>
     <div data-k="upd">${updateBanner()}</div>
     <main class="scroll" data-k="board">${body}</main>`;
+}
+
+// One tap into herdr on each paired computer (reuses an open herdr tab).
+function herdrRow(hs) {
+  return `<div class="herdr">${hs.map((h) => `<button class="go" data-act="herdr" data-h="${esc(h.name)}">
+    <span class="badge">${I.shell}</span><div class="who"><b>herdr</b><span>${esc(h.name)}</span></div>
+    <span class="live ${h.state === 'online' ? '' : h.state === 'connecting' ? 'warn' : 'off'}"></span><span class="chev">›</span></button>`).join('')}</div>`;
 }
 
 function updateBanner() {
@@ -842,15 +866,6 @@ function card(g) {
     ${tail}
     ${st === 'idle' || st === 'unknown' ? '' : `<div class="prog ${st}"><i></i></div>`}
   </button>`;
-}
-
-function otherPanes() {
-  const rows = [];
-  for (const h of hosts.values()) for (const p of h.otherPanes || []) rows.push({ h, p });
-  if (!rows.length) return '';
-  return `<div class="section-label">Other panes</div><div class="mini">${rows.slice(0, 12).map(({ h, p }) => `
-    <button data-act="pane" data-host="${esc(h.name)}" data-pane="${esc(p.pane_id)}"><span class="badge">$</span>
-      <div class="who"><b>${esc(paneTitle(h, p))}</b><span>${esc(tidyPath(h, p.foreground_cwd || p.cwd))}${hosts.size > 1 ? ' · ' + esc(h.name) : ''}</span></div></button>`).join('')}</div>`;
 }
 
 function shortUptime(u) {
@@ -884,7 +899,7 @@ const SETUP = 'bash <(curl -fsSL https://raw.githubusercontent.com/txapotxapa/gh
 
 function viewDetail(v) {
   const g = agents.get(v.key);
-  if (!g) return `<div class="bar"><button class="icon-btn" data-act="back">${I.back}</button><div class="plain">Agent closed</div></div>`;
+  if (!g) return `<div class="bar"><button class="icon-btn" data-act="back">${I.back}</button><button class="icon-btn" data-act="home" aria-label="Home">${I.home}</button><div class="plain">Agent closed</div></div>`;
   const k = kindMeta(g.kind);
   const tabs = hasLog(g) ? [['chat', 'Chat'], ['trace', 'Trace'], ['screen', 'Terminal']] : [['screen', 'Terminal']];
   const st = g.gone ? 'idle' : g.status;
@@ -894,7 +909,7 @@ function viewDetail(v) {
   else body = screenHtml(g);
   const banner = st === 'blocked'
     ? `<button class="banner" data-act="review" data-key="${esc(g.key)}"><i></i><span>Waiting on you${g.menu?.question ? ': ' + esc(g.menu.question) : ''}</span><b>Review</b></button>` : '';
-  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button>
+  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button><button class="icon-btn" data-act="home" aria-label="Home">${I.home}</button>
       <span class="badge lg">${esc(k.short)}</span>
       <div class="title" data-k="dt"><b>${esc(displayName(g))}</b><span>${esc(where(g))} · ${esc(STATUS[st]?.label || st)}</span></div>
       <button class="icon-btn" data-act="agent-menu" data-key="${esc(g.key)}" aria-label="More">${I.more}</button></div>
@@ -1293,7 +1308,7 @@ function viewNew(v) {
   if (h?.info.home && !seen.has(h.info.home)) folders.push({ path: h.info.home, branch: '' });
   const isGit = !!(h?.repos || []).find((r) => r.path === v.folder);
   const label = v.kind === 'shell' ? 'Open shell in herdr' : 'Start ' + (KINDS[v.kind]?.label || v.kind) + ' in herdr';
-  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Close">${I.close}</button><div class="plain">New agent</div></div>
+  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Close">${I.close}</button><button class="icon-btn" data-act="home" aria-label="Home">${I.home}</button><div class="plain">New agent</div></div>
     <div class="scroll"><div class="form" data-k="newform">
       ${hs.length > 1 ? `<div class="label">Computer</div><div class="chips" style="padding:0">${hs.map((x) => `<button class="chip" data-act="new-host" data-h="${esc(x.name)}" aria-pressed="${x.name === v.host}" ${x.state === 'online' ? '' : 'disabled'}>${esc(x.name)}</button>`).join('')}</div>` : ''}
       ${!h || h.state !== 'online' ? `<div class="empty" style="margin:0"><h3>No computer online</h3><p>${esc(offlineReason(h || hs[0]))}</p></div>` : `
@@ -1393,7 +1408,7 @@ function viewActivity() {
 function viewComputers() {
   const hs = [...hosts.values()];
   for (const h of hs) if (h.state === 'online' && !h.agentStates && !h.agentsLoading) { h.agentsLoading = true; loadAgentStates(h).catch(() => {}).finally(() => { h.agentsLoading = false; }); }
-  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button><div class="plain">Computers</div></div>
+  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button><button class="icon-btn" data-act="home" aria-label="Home">${I.home}</button><div class="plain">Computers</div></div>
     <div class="scroll" data-k="hosts"><div class="hosts">
       ${hs.map((h) => {
         const on = h.state === 'online';
@@ -1460,6 +1475,7 @@ document.addEventListener('click', async (e) => {
   switch (act) {
     case 'tab': setTab(el.dataset.t); break;
     case 'back': goBack(); break;
+    case 'home': if (ui.sheet) closeSheet(); setTab('board'); break;
     case 'go': push({ v: el.dataset.v }); break;
     case 'new': newAgent(); break;
     case 'agent': if (g) openDetail(g.key); break;
@@ -1509,6 +1525,7 @@ document.addEventListener('click', async (e) => {
     case 'filter': ui.filter = el.dataset.f; render(); break;
     case 'reconnect': { const h = hosts.get(el.dataset.h); if (h) reconnectNow(h); break; }
     case 'reconnect-all': for (const h of hosts.values()) if (h.state !== 'online') reconnectNow(h); break;
+    case 'herdr': openHerdr(el.dataset.h); break;
     case 'open-shell': try { N.openShell(el.dataset.h); } catch (x) {} break;
     case 'copy': try { N.copy(SETUP); toast('Copied'); } catch (x) {} break;
     case 'scan': try { N.scanQr(); } catch (x) {} break;

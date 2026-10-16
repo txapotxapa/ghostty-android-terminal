@@ -37,6 +37,11 @@ final class KeyCapView extends TextView {
 
     KeyCapView(Context context) {
         super(context);
+        try {
+            setTypeface(context.getResources().getFont(R.font.jetbrains_mono));
+        } catch (RuntimeException e) {
+            setTypeface(Typeface.MONOSPACE);
+        }
         // Auto-shrink long labels (CTRL, HOME, combo prefixes) so they fit a
         // narrow flex cap instead of clipping; short/glyph caps stay at max
         // size. ExtraKeysView later pins one uniform size per row (see

@@ -28,6 +28,7 @@ import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
@@ -35,6 +36,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -114,6 +116,12 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private boolean imeVisible;
     /** A QR pairing link that arrived before a tab could be opened for it. */
     private String pendingSshLink;
+    /** A home-screen herdr shortcut tapped before the first tab could open. */
+    private String pendingHerdr;
+    /** herdr tabs by computer, so one tap returns to the open one. */
+    private final java.util.Map<String, TerminalSession> herdrTabs = new java.util.HashMap<>();
+    static final String EXTRA_HERDR = "io.github.sylirre.terminal.HERDR_HOST";
+    private LinearLayout mainNav;
     private AppSettings settings;
     /** The agent board over the terminal UI; created on first show. */
     private BoardView board;
@@ -146,6 +154,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         tabs = findViewById(R.id.tabs);
         forceShell = getIntent().getBooleanExtra(EXTRA_FORCE_SHELL, false);
         pendingSshLink = SshLinks.fromIntent(getIntent());
+        pendingHerdr = getIntent().getStringExtra(EXTRA_HERDR);
         extraKeys = findViewById(R.id.extra_keys);
         extraKeys.attachTerminal(terminal);
         mainTopBar = findViewById(R.id.main_top_bar);
@@ -184,11 +193,15 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         applyTextMargins();
         findViewById(R.id.settings_button).setOnClickListener(this::openSettings);
         Glyphs.applyTo(findViewById(R.id.settings_button));
-        findViewById(R.id.agents_button).setOnClickListener(v -> showBoard(true));
-        Glyphs.applyTo(findViewById(R.id.agents_button));
+        // The board lives in the bottom bar now (Agents / Shell / Activity).
+        findViewById(R.id.agents_button).setVisibility(View.GONE);
+        findViewById(R.id.home_button).setOnClickListener(v -> goHome());
+        mainNav = findViewById(R.id.main_nav);
+        buildMainNav();
         boolean startOnBoard = savedInstanceState != null
                 ? savedInstanceState.getBoolean(STATE_BOARD, false)
-                : !forceShell && pendingSshLink == null && settings.boardOnLaunch()
+                : !forceShell && pendingSshLink == null && pendingHerdr == null
+                        && settings.boardOnLaunch()
                         && !awaitingOnboarding && UserlandRootfs.isInstalled(this)
                         && !SshLinks.savedHosts(this).isEmpty();
         if (startOnBoard || getIntent().hasExtra(BoardView.EXTRA_HOST)) showBoard(true);
@@ -245,12 +258,27 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             }
             MainActivity.this.imeVisible = imeVisible;
             extraKeys.setKeyboardVisible(imeVisible);
+            // The bottom bar gives its height back to the terminal while typing.
+            if (mainNav != null) mainNav.setVisibility(imeVisible ? View.GONE : View.VISIBLE);
             // WindowInsets.CONSUMED is API 30; on 29 (our minSdk) touching it
             // throws NoSuchFieldError, so consume the old way there.
             return Build.VERSION.SDK_INT >= 30
                     ? WindowInsets.CONSUMED
                     : insets.consumeSystemWindowInsets();
         });
+
+        // Some window setups (no edge-to-edge) consume the insets before the
+        // listener above sees them; the layout pass that follows every IME
+        // show/hide catches those too.
+        if (Build.VERSION.SDK_INT >= 30) {
+            root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                WindowInsets now = root.getRootWindowInsets();
+                if (now == null || mainNav == null) return;
+                boolean ime = now.isVisible(WindowInsets.Type.ime());
+                int want = ime ? View.GONE : View.VISIBLE;
+                if (mainNav.getVisibility() != want) mainNav.setVisibility(want);
+            });
+        }
 
         tabs.setListener(new TabStripView.Listener() {
             @Override
@@ -291,7 +319,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                     // inside layout() is dropped until the next traversal —
                     // which otherwise only arrives on the first touch.
                     terminal.post(() -> {
-                        if (sessions.isEmpty()) createFirstSession();
+                        // Starting on the board: no tab until the terminal is
+                        // asked for (Shell opens herdr, or a local shell).
+                        if (sessions.isEmpty() && !boardVisible()) createFirstSession();
                     });
                 }
             });
@@ -327,6 +357,13 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             openBoardAgentFrom(intent);
             return;
         }
+        String herdr = intent.getStringExtra(EXTRA_HERDR);
+        if (herdr != null) {
+            intent.removeExtra(EXTRA_HERDR);
+            if (awaitingOnboarding || sessions.isEmpty()) pendingHerdr = herdr;
+            else openHerdr(herdr);
+            return;
+        }
         String link = SshLinks.fromIntent(intent);
         if (link == null) return;
         // singleTask: a scan while the app runs lands here. Before the first
@@ -340,6 +377,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     protected void onResume() {
         super.onResume();
         AppUpdater.maybeCheck(this, sessions.isEmpty());
+        publishHerdrShortcuts();
         // Re-apply the whole settings surface: edits made in SettingsActivity /
         // ThemeActivity / ExtraKeysActivity only persist to the stores, so
         // returning here is what pushes them to the live terminal, window and
@@ -426,8 +464,24 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
      */
     private void applyChrome(ChromePalette p) {
         chrome = p;
-        findViewById(R.id.root).setBackgroundColor(boardVisible() ? BOARD_GROUND : p.surface1);
-        mainTopBar.setBackground(p.barSurface(true));
+        findViewById(R.id.root).setBackgroundColor(boardVisible() ? BOARD_GROUND : p.surfaceBase);
+        mainTopBar.setBackgroundColor(p.surfaceBase);
+        if (mainNav != null) {
+            mainNav.setBackground(p.barSurface(false));
+            for (int i = 0; i < mainNav.getChildCount(); i++) {
+                tintNavItem((TextView) mainNav.getChildAt(i), p);
+            }
+        }
+        if (Build.VERSION.SDK_INT < 35) {
+            // Without enforced edge-to-edge the system bars keep their own
+            // fill; match them to the chrome so a light theme's dark icons read.
+            getWindow().setStatusBarColor(boardVisible() ? BOARD_GROUND : p.surfaceBase);
+            getWindow().setNavigationBarColor(boardVisible() ? BOARD_GROUND : p.surface1);
+        }
+        ImageView home = findViewById(R.id.home_button);
+        home.setImageTintList(android.content.res.ColorStateList.valueOf(p.textPrimary));
+        home.setBackground(p.ripple(android.graphics.Color.TRANSPARENT,
+                Chrome.dimen(this, R.dimen.tab_radius), p.border));
         styleTopBarButton(promptPrevButton);
         styleTopBarButton(promptNextButton);
         styleTopBarButton(findViewById(R.id.settings_button));
@@ -510,7 +564,23 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             settings.setTerminalBoldItalicFontPath(null);
         }
 
+        // No custom font: the bundled JetBrains Mono family (the design's
+        // terminal face) instead of the platform's generic monospace.
+        if (regularPath == null) {
+            regular = bundledFont(R.font.jetbrains_mono);
+            if (boldPath == null) bold = bundledFont(R.font.jetbrains_mono_bold);
+            if (italicPath == null) italic = bundledFont(R.font.jetbrains_mono_italic);
+            if (boldItalicPath == null) boldItalic = bundledFont(R.font.jetbrains_mono_bold_italic);
+        }
         terminal.setTerminalFonts(regular, bold, italic, boldItalic);
+    }
+
+    private Typeface bundledFont(int id) {
+        try {
+            return getResources().getFont(id);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private boolean userlandByDefault() {
@@ -530,6 +600,12 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             String link = pendingSshLink;
             pendingSshLink = null;
             openSshPairingTab(link);
+            if (!sessions.isEmpty()) return;
+        }
+        if (pendingHerdr != null) {
+            String h = pendingHerdr;
+            pendingHerdr = null;
+            openHerdr(h);
             if (!sessions.isEmpty()) return;
         }
         createSession(userlandByDefault());
@@ -592,6 +668,21 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 }
 
                 @Override
+                public void boardOpenHerdr(String h) {
+                    openHerdr(h);
+                }
+
+                @Override
+                public void boardShell(String h) {
+                    if (sessions.isEmpty() && !h.isEmpty()) {
+                        openHerdr(h);
+                        return;
+                    }
+                    showBoard(false);
+                    if (sessions.isEmpty()) createSession(userlandByDefault());
+                }
+
+                @Override
                 public void boardOpenTab(String command) {
                     showBoard(false);
                     createSession(true);
@@ -623,10 +714,117 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             InputMethodManager imm = getSystemService(InputMethodManager.class);
             if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
             findViewById(R.id.root).setBackgroundColor(BOARD_GROUND);
+            if (Build.VERSION.SDK_INT < 35) {
+                getWindow().setStatusBarColor(BOARD_GROUND);
+                getWindow().setNavigationBarColor(BOARD_GROUND);
+            }
+            if (Build.VERSION.SDK_INT >= 30 && getWindow().getInsetsController() != null) {
+                getWindow().getInsetsController().setSystemBarsAppearance(0,
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                                | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            }
         } else {
             applyTheme();
             terminal.requestFocus();
             if (current != null && settings.touchKeyboard()) showKeyboard();
+        }
+    }
+
+    /**
+     * herdr on {@code h}: back to its open tab when there is one, else a new
+     * Linux tab running {@code ssh h} (the pairing's RemoteCommand lands in
+     * herdr). Unknown computers are ignored.
+     */
+    private void openHerdr(String h) {
+        if (h == null || !SshLinks.savedHosts(this).contains(h)) return;
+        if (board != null && boardVisible()) showBoard(false);
+        TerminalSession open = herdrTabs.get(h);
+        if (open != null && sessions.sessions().contains(open)) {
+            switchTo(open);
+            return;
+        }
+        if (!userlandByDefault()) {
+            Toast.makeText(this, R.string.toast_ssh_needs_linux, Toast.LENGTH_LONG).show();
+            return;
+        }
+        createSession(true);
+        if (current != null && current.isUserland()) {
+            current.write("exec ssh " + h + "\r");
+            herdrTabs.put(h, current);
+        }
+    }
+
+    /** Home: the board's Agents screen, from anywhere. */
+    private void goHome() {
+        showBoard(true);
+        board.setTab("board");
+    }
+
+    /** The terminal's bottom bar: Agents and Activity open the board, Shell is here. */
+    private void buildMainNav() {
+        mainNav.removeAllViews();
+        addNavItem(R.drawable.ic_glyph_agents, R.string.nav_agents, false, v -> goHome());
+        addNavItem(R.drawable.ic_glyph_shell, R.string.nav_shell, true, v -> terminal.requestFocus());
+        addNavItem(R.drawable.ic_glyph_activity, R.string.nav_activity, false, v -> {
+            showBoard(true);
+            board.setTab("activity");
+        });
+    }
+
+    private void addNavItem(int icon, int label, boolean active, View.OnClickListener click) {
+        TextView item = new TextView(this);
+        item.setTag(active);
+        item.setText(label);
+        item.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        item.setGravity(android.view.Gravity.CENTER);
+        android.graphics.drawable.Drawable d = getDrawable(icon).mutate();
+        int px = Chrome.dp(this, R.dimen.nav_icon);
+        d.setBounds(0, 0, px, px);
+        item.setCompoundDrawables(null, d, null, null);
+        tintNavItem(item, chrome != null ? chrome : ChromePalette.from(this, android.graphics.Color.BLACK));
+        item.setCompoundDrawablePadding(Chrome.dp(this, R.dimen.nav_icon_gap));
+        item.setMinHeight(Chrome.dp(this, R.dimen.icon_button));
+        item.setMinWidth(Chrome.dp(this, R.dimen.nav_item_min));
+        item.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Chrome.color(this, R.color.accent_translucent)),
+                null, null));
+        item.setContentDescription(getString(label));
+        item.setOnClickListener(click);
+        mainNav.addView(item, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+    }
+
+    /** Nav inks follow the chrome palette, so light themes keep them readable. */
+    private void tintNavItem(TextView item, ChromePalette p) {
+        int ink = Boolean.TRUE.equals(item.getTag()) ? p.textPrimary : p.textSecondary;
+        item.setTextColor(ink);
+        android.graphics.drawable.Drawable d = item.getCompoundDrawables()[1];
+        if (d != null) d.setTint(ink);
+    }
+
+    /** Home-screen shortcuts (long-press the icon): herdr on each paired computer. */
+    private void publishHerdrShortcuts() {
+        android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
+        if (sm == null) return;
+        java.util.List<android.content.pm.ShortcutInfo> list = new java.util.ArrayList<>();
+        int max = Math.min(4, sm.getMaxShortcutCountPerActivity());
+        for (String h : SshLinks.savedHosts(this)) {
+            if (list.size() >= max) break;
+            Intent i = new Intent(this, MainActivity.class)
+                    .setAction(Intent.ACTION_MAIN)
+                    .putExtra(EXTRA_HERDR, h)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            list.add(new android.content.pm.ShortcutInfo.Builder(this, "herdr-" + h)
+                    .setShortLabel(getString(R.string.shortcut_herdr, h))
+                    .setLongLabel(getString(R.string.shortcut_herdr_long, h))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_herdr))
+                    .setIntent(i)
+                    .build());
+        }
+        try {
+            sm.setDynamicShortcuts(list);
+        } catch (RuntimeException ignored) {
+            // rate-limited or launcher refused; next resume tries again
         }
     }
 
@@ -1094,6 +1292,24 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         List<TerminalSession> remaining = sessions.sessions();
         if (remaining.isEmpty()) {
             SessionService.stop(this);
+            if (settings.boardOnLaunch() && !SshLinks.savedHosts(this).isEmpty()) {
+                // The board is home: a dropped herdr connection (or closing the
+                // last tab) lands there instead of closing the app.
+                terminal.attachSession(null);
+                current = null;
+                updateTabs();
+                String host = null;
+                for (java.util.Map.Entry<String, TerminalSession> e : herdrTabs.entrySet()) {
+                    if (e.getValue() == s) host = e.getKey();
+                }
+                if (host != null) {
+                    herdrTabs.remove(host);
+                    Toast.makeText(this, getString(R.string.toast_herdr_disconnected, host),
+                            Toast.LENGTH_SHORT).show();
+                }
+                showBoard(true);
+                return;
+            }
             finishAndRemoveTask();
             return;
         }

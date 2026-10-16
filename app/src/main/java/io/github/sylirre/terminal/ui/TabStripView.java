@@ -256,25 +256,37 @@ public class TabStripView extends LinearLayout {
     private void style(Holder h, boolean active) {
         h.styledActive = active;
         h.styledGen = paletteGen;
-        float r = Chrome.dimen(getContext(), R.dimen.radius_md);
-        // The active tab is marked by an accent border ring; inactive pills
-        // keep the neutral hairline. Strokes draw inside the bounds, so pill
-        // widths stay stable across selection.
+        float r = Chrome.dimen(getContext(), R.dimen.tab_radius);
+        // Design chips: the active tab is a filled chip, the rest are bare
+        // labels in the secondary ink; all in the terminal's mono face.
         h.pill.setBackground(active
-                ? palette.ripple(palette.surface3, r, palette.accent,
-                        dp(R.dimen.tab_active_border))
-                : palette.ripple(palette.surface2, r, palette.border));
+                ? palette.ripple(palette.surface3, r, 0)
+                : palette.rippleTransparent(r));
         h.label.setTextColor(active ? palette.textPrimary : palette.textSecondary);
-        h.label.setTypeface(active
-                ? Typeface.create("sans-serif-medium", Typeface.NORMAL) : Typeface.DEFAULT);
+        h.label.setTypeface(mono(active));
         h.close.setTextColor(palette.textSecondary);
         Glyphs.applyTo(h.close);  // × → vector icon, re-tinted to the palette
     }
 
     private void styleAddButton() {
-        addButton.setImageTintList(ColorStateList.valueOf(palette.accent));
-        addButton.setBackground(palette.ripple(palette.surface2,
-                Chrome.dimen(getContext(), R.dimen.radius_md), palette.border));
+        addButton.setImageTintList(ColorStateList.valueOf(palette.textPrimary));
+        addButton.setBackground(palette.ripple(Color.TRANSPARENT,
+                Chrome.dimen(getContext(), R.dimen.tab_radius), palette.border));
+    }
+
+    private Typeface monoRegular, monoMedium;
+
+    /** JetBrains Mono (medium for the active tab); platform mono if it fails to load. */
+    private Typeface mono(boolean medium) {
+        try {
+            if (monoRegular == null) {
+                monoRegular = getResources().getFont(R.font.jetbrains_mono);
+                monoMedium = getResources().getFont(R.font.jetbrains_mono_medium);
+            }
+            return medium ? monoMedium : monoRegular;
+        } catch (RuntimeException e) {
+            return Typeface.MONOSPACE;
+        }
     }
 
     /**

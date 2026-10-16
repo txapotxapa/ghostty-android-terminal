@@ -55,6 +55,10 @@ final class BoardView {
     /** What the board asks of the terminal side of MainActivity. */
     interface Host {
         void boardShowShell();
+        /** herdr on that computer: its open tab if there is one, else a new one. */
+        void boardOpenHerdr(String h);
+        /** The terminal: open tabs as they are, or herdr on {@code h} when there are none. */
+        void boardShell(String h);
         /** New userland tab typing {@code command} at its prompt. */
         void boardOpenTab(String command);
         void boardScanQr();
@@ -165,6 +169,11 @@ final class BoardView {
         web.evaluateJavascript("ash.back()", r -> {
             if (!"true".equals(r)) activity.moveTaskToBack(true);
         });
+    }
+
+    /** Switches the page to its Agents or Activity tab (the terminal's bottom bar). */
+    void setTab(String tab) {
+        js("ash.tab(" + q(tab) + ")");
     }
 
     void openAgent(String h, String pane) {
@@ -337,6 +346,17 @@ final class BoardView {
         @JavascriptInterface
         public void openShell(String h) {
             if (validHost(h)) main.post(() -> host.boardOpenTab("exec ssh " + h + "-sh"));
+        }
+
+        @JavascriptInterface
+        public void herdr(String h) {
+            if (validHost(h)) main.post(() -> host.boardOpenHerdr(h));
+        }
+
+        @JavascriptInterface
+        public void shell(String h) {
+            String target = validHost(h) ? h : "";
+            main.post(() -> host.boardShell(target));
         }
 
         @JavascriptInterface

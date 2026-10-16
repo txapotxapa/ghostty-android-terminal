@@ -75,7 +75,9 @@ final class KeyCaps {
             if (avail <= 0 || text.length() == 0) continue;
             TextPaint paint = new TextPaint(cap.getPaint());
             paint.setTextSize(maxPx);
-            float width = paint.measureText(text.toString());
+            // A little slack: measureText rounds below what the layout needs,
+            // and a label that "just fits" gets ellipsized.
+            float width = paint.measureText(text.toString()) * 1.12f;
             if (width > avail) {
                 uniformSp = Math.min(uniformSp, Math.max(
                         KeyCapView.TEXT_SP_MIN, KeyCapView.TEXT_SP_MAX * avail / width));

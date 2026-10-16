@@ -29,8 +29,8 @@
          there is no fixed min width; padding centers the label in the cap. -->
     <dimen name="key_pad_h">6dp</dimen>
     <dimen name="key_pad_v">8dp</dimen>
-    <dimen name="key_gap">4dp</dimen>
-    <dimen name="key_radius">10dp</dimen>
+    <dimen name="key_gap">6dp</dimen>
+    <dimen name="key_radius">8dp</dimen>
     <!-- Inset of the swipe-up secondary hint from a cap's top-right corner. -->
     <dimen name="key_hint_inset">4dp</dimen>
     <!-- Leading profile-switch column width (when the switcher is enabled). -->
@@ -41,6 +41,7 @@
          tab_active_border is the active pill's accent ring; tab_indicator is
          the progress ring's stroke (kept heavier so the small circle stays
          readable). -->
+    <dimen name="tab_radius">10dp</dimen>
     <dimen name="tab_pad_h">12dp</dimen>
     <dimen name="tab_pad_v">9dp</dimen>
     <dimen name="tab_active_border">1.5dp</dimen>
@@ -57,7 +58,7 @@
     <!-- Current-value read-out on settings rows. -->
     <dimen name="text_row_value">14sp</dimen>
     <!-- Session tab labels. -->
-    <dimen name="text_tab">14sp</dimen>
+    <dimen name="text_tab">12sp</dimen>
     <!-- Glyph-only top-bar buttons (search, settings, prompt nav). -->
     <dimen name="text_icon_glyph">18sp</dimen>
     <!-- Smallest captions (swatch labels, inline errors). -->
@@ -81,4 +82,8 @@
     <dimen name="picker_bar_height">20dp</dimen>
     <dimen name="picker_swatch_height">40dp</dimen>
     <dimen name="picker_chip">28dp</dimen>
+    <!-- Terminal bottom bar. -->
+    <dimen name="nav_icon">22dp</dimen>
+    <dimen name="nav_icon_gap">3dp</dimen>
+    <dimen name="nav_item_min">64dp</dimen>
 </resources>

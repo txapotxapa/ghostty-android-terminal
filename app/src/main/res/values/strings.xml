@@ -590,4 +590,11 @@
         <item>bksp</item>
         <item>ins</item>
     </string-array>
+    <string name="nav_agents">Agents</string>
+    <string name="nav_shell">Shell</string>
+    <string name="nav_activity">Activity</string>
+    <string name="shortcut_herdr">herdr · %1$s</string>
+    <string name="shortcut_herdr_long">Open herdr on %1$s</string>
+    <string name="home_button_description">Home</string>
+    <string name="toast_herdr_disconnected">Disconnected from %1$s. Tap herdr to reconnect.</string>
 </resources>

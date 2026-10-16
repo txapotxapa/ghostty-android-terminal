@@ -69,9 +69,9 @@ nav.tabs .dot { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 
 .h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
 .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: left; display: inline-flex; align-items: center; gap: 6px;
   min-height: 24px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sub .live { width: 7px; height: 7px; border-radius: 4px; background: var(--mint); flex: none; }
-.sub .live.warn { background: var(--amber); animation: pulse 1.4s ease-in-out infinite; }
-.sub .live.off { background: var(--faint); }
+.sub .live, .herdr .live { width: 7px; height: 7px; border-radius: 4px; background: var(--mint); flex: none; }
+.sub .live.warn, .herdr .live.warn { background: var(--amber); animation: pulse 1.4s ease-in-out infinite; }
+.sub .live.off, .herdr .live.off { background: var(--faint); }
 .fab { width: 44px; height: 44px; border-radius: 22px; background: var(--mint); color: var(--mint-ink); display: flex; align-items: center; justify-content: center; flex: none; }
 .fab:active { transform: scale(.94); }
 
@@ -341,3 +341,15 @@ nav.tabs .dot { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 
 .star-gap { width: 48px; flex: none; }
 .krow.sel { background: #17231F; border-radius: 12px; border-bottom-color: transparent; }
 .krow.sel .who b { color: var(--mint-fg); }
+
+/* One tap into herdr, per paired computer. */
+.herdr { margin: 0 16px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.herdr .go { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 12px 14px; text-align: left; border-top: 1px solid var(--line); }
+.herdr .go:first-child { border-top: 0; }
+.herdr .go:active { background: #1F2124; }
+.herdr .badge { background: #15291F; color: #7FD1B9; }
+.herdr .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.herdr .who b { font-size: 15px; font-weight: 600; }
+.herdr .who span { font: 12px 'JetBrains Mono', monospace; color: var(--muted); }
+.herdr .chev { color: var(--muted); font-size: 20px; line-height: 1; }
+.empty.quiet { border-style: dashed; }
