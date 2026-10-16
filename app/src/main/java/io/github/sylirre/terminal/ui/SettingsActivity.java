@@ -392,12 +392,35 @@ public final class SettingsActivity extends Activity {
                 settings::setBoardOnLaunch));
         sections.add(new SettingsSection(getString(R.string.agents_button_description), board));
 
+        List<Setting> notify = new ArrayList<>();
+        notify.add(new Setting.Toggle(
+                getString(R.string.setting_notify_needs_title),
+                getString(R.string.setting_notify_needs_summary),
+                settings::notifyNeeds,
+                settings::setNotifyNeeds));
+        notify.add(new Setting.Toggle(
+                getString(R.string.setting_notify_done_title),
+                getString(R.string.setting_notify_done_summary),
+                settings::notifyDone,
+                settings::setNotifyDone));
+        notify.add(new Setting.Toggle(
+                getString(R.string.setting_notify_mutes_title),
+                getString(R.string.setting_notify_mutes_summary),
+                settings::notifyFollowMutes,
+                settings::setNotifyFollowMutes));
+        sections.add(new SettingsSection(getString(R.string.settings_group_notifications), notify));
+
         List<Setting> about = new ArrayList<>();
         about.add(new Setting.Action(
                 getString(R.string.setting_check_updates_title),
                 getString(R.string.setting_check_updates_summary),
-                () -> AppUpdater.installedVersionName(this),
+                this::updateRowValue,
                 () -> AppUpdater.checkNow(this)));
+        about.add(new Setting.Toggle(
+                getString(R.string.setting_updates_mobile_title),
+                getString(R.string.setting_updates_mobile_summary),
+                settings::updatesOnMobileData,
+                settings::setUpdatesOnMobileData));
         sections.add(new SettingsSection(getString(R.string.settings_group_updates), about));
         return sections;
     }
@@ -818,4 +841,18 @@ public final class SettingsActivity extends Activity {
         setResult(RESULT_OK, new Intent().putExtra(EXTRA_ACTION, action));
         finish();
     }
+
+    /** The update row's value: the installed version, or where an update stands. */
+    private String updateRowValue() {
+        AppUpdater.State s = AppUpdater.state(this);
+        switch (s.phase) {
+            case AVAILABLE: return s.version + " available";
+            case DOWNLOADING: return s.percent() + "%";
+            case READY:
+            case PERMISSION: return s.version + " ready";
+            case FAILED: return "didn't finish";
+            default: return s.installed;
+        }
+    }
+
 }

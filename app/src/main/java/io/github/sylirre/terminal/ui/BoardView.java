@@ -66,6 +66,9 @@ final class BoardView {
     static final String EXTRA_PANE = "io.github.sylirre.terminal.board.PANE";
     static final int REQ_DICTATE = 4711;
     private static final String CHANNEL_ID = "agents";
+    private static final String CHANNEL_DONE = "agents_done";
+    private final AppSettings settings;
+    private final AppUpdater.Listener updates = s -> js("ash.updateChanged && ash.updateChanged()");
     private static final String URL = "file:///android_asset/board/index.html";
 
     private final Activity activity;
@@ -81,6 +84,8 @@ final class BoardView {
     BoardView(Activity activity, Host host) {
         this.activity = activity;
         this.host = host;
+        settings = new AppSettings(activity);
+        AppUpdater.addListener(updates);
         web = new WebView(activity);
         web.setBackgroundColor(Color.parseColor("#121314"));
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -189,6 +194,7 @@ final class BoardView {
     }
 
     void destroy() {
+        AppUpdater.removeListener(updates);
         links.stopAll();
         web.destroy();
     }
@@ -252,13 +258,20 @@ final class BoardView {
 
     // --- notifications -----------------------------------------------------------
 
-    private void notifyNeedsYou(String key, String title, String body) {
+    /** kind: "needs" (high importance, heads-up) or "done" (default importance). */
+    private void notifyAgent(String key, String title, String body, String kind) {
         NotificationManager nm = activity.getSystemService(NotificationManager.class);
         if (nm == null) return;
-        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL_ID,
-                    activity.getString(R.string.board_channel_name), NotificationManager.IMPORTANCE_HIGH);
-            ch.setDescription(activity.getString(R.string.board_channel_description));
+        boolean done = "done".equals(kind);
+        String channel = done ? CHANNEL_DONE : CHANNEL_ID;
+        if (nm.getNotificationChannel(channel) == null) {
+            NotificationChannel ch = done
+                    ? new NotificationChannel(CHANNEL_DONE, activity.getString(R.string.board_channel_done_name),
+                            NotificationManager.IMPORTANCE_DEFAULT)
+                    : new NotificationChannel(CHANNEL_ID, activity.getString(R.string.board_channel_name),
+                            NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription(activity.getString(done ? R.string.board_channel_done_description
+                    : R.string.board_channel_description));
             nm.createNotificationChannel(ch);
         }
         int bar = key.indexOf('|');
@@ -268,7 +281,7 @@ final class BoardView {
                 .putExtra(EXTRA_PANE, bar > 0 ? key.substring(bar + 1) : "");
         PendingIntent pi = PendingIntent.getActivity(activity, key.hashCode(), open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new Notification.Builder(activity, CHANNEL_ID)
+        Notification n = new Notification.Builder(activity, channel)
                 .setSmallIcon(R.drawable.ic_stat_terminal)
                 .setContentTitle(title)
                 .setContentText(body)
@@ -379,8 +392,30 @@ final class BoardView {
         }
 
         @JavascriptInterface
-        public void notify(String key, String title, String body) {
-            main.post(() -> notifyNeedsYou(key, title, body));
+        public void notify(String key, String title, String body, String kind) {
+            main.post(() -> notifyAgent(key, title, body, kind));
+        }
+
+        @JavascriptInterface
+        public String prefs() {
+            JSONObject o = new JSONObject();
+            try {
+                o.put("needs", settings.notifyNeeds());
+                o.put("done", settings.notifyDone());
+                o.put("mutes", settings.notifyFollowMutes());
+            } catch (org.json.JSONException ignored) {
+            }
+            return o.toString();
+        }
+
+        @JavascriptInterface
+        public String updateInfo() {
+            return AppUpdater.enabled(activity) ? AppUpdater.infoJson(activity) : "{}";
+        }
+
+        @JavascriptInterface
+        public void openUpdates() {
+            main.post(() -> AppUpdater.checkNow(activity));
         }
 
         @JavascriptInterface

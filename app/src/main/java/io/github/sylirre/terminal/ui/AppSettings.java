@@ -24,6 +24,10 @@ public final class AppSettings {
     private static final String FILE = "settings";
     private static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";
     private static final String KEY_BOARD_ON_LAUNCH = "board_on_launch";
+    private static final String KEY_NOTIFY_NEEDS = "notify_needs";
+    private static final String KEY_NOTIFY_DONE = "notify_done";
+    private static final String KEY_NOTIFY_MUTES = "notify_mutes";
+    private static final String KEY_UPDATES_MOBILE = "updates_mobile_data";
     private static final String KEY_IMMERSIVE_MODE = "immersive_mode";
     private static final String KEY_RICH_KEYBOARD = "rich_keyboard";
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_enabled";
@@ -126,6 +130,42 @@ public final class AppSettings {
 
     public void setBoardOnLaunch(boolean enabled) {
         prefs.edit().putBoolean(KEY_BOARD_ON_LAUNCH, enabled).apply();
+    }
+
+    /** Phone notification when an agent stops for approval or an answer. */
+    public boolean notifyNeeds() {
+        return prefs.getBoolean(KEY_NOTIFY_NEEDS, true);
+    }
+
+    public void setNotifyNeeds(boolean on) {
+        prefs.edit().putBoolean(KEY_NOTIFY_NEEDS, on).apply();
+    }
+
+    /** Phone notification when an agent finishes its turn. */
+    public boolean notifyDone() {
+        return prefs.getBoolean(KEY_NOTIFY_DONE, true);
+    }
+
+    public void setNotifyDone(boolean on) {
+        prefs.edit().putBoolean(KEY_NOTIFY_DONE, on).apply();
+    }
+
+    /** Honor herdr's [ui.sound.agents] mutes for phone notifications. */
+    public boolean notifyFollowMutes() {
+        return prefs.getBoolean(KEY_NOTIFY_MUTES, true);
+    }
+
+    public void setNotifyFollowMutes(boolean on) {
+        prefs.edit().putBoolean(KEY_NOTIFY_MUTES, on).apply();
+    }
+
+    /** Let automatic update downloads (~130 MB) use mobile data. */
+    public boolean updatesOnMobileData() {
+        return prefs.getBoolean(KEY_UPDATES_MOBILE, false);
+    }
+
+    public void setUpdatesOnMobileData(boolean on) {
+        prefs.edit().putBoolean(KEY_UPDATES_MOBILE, on).apply();
     }
 
     /** When true, hide the status and navigation bars while the terminal is foreground. */

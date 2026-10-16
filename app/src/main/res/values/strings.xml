@@ -143,11 +143,53 @@
     <string name="toast_ssh_no_link">No pairing link on the clipboard. Run a-sh-pair on your computer and copy the ash:// link it prints.</string>
     <!-- GitHub owner/repo whose releases (tag a-sh-qr-pair_v<major>.<minor>.<build>, one .apk) the app updates from; empty disables. -->
     <string name="update_repo" translatable="false">txapotxapa/ghostty-android-terminal</string>
-    <string name="update_ready_title">Update ready</string>
-    <string name="update_ready_message">%1$s is downloaded. Installing restarts the app and ends open sessions; otherwise it installs on the next fresh launch.</string>
     <string name="update_install_now">Install now</string>
-    <string name="update_later">Next launch</string>
-    <string name="update_failed">Update failed: %s</string>
+    <string name="update_dialog_title">A-SH updates</string>
+    <string name="update_installed">Installed: %s</string>
+    <string name="update_checked">checked %s</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date_title">You\'re up to date</string>
+    <string name="update_check_again">Check again</string>
+    <string name="update_available_title">A-SH %s is available</string>
+    <string name="update_download">Download (%s)</string>
+    <string name="update_downloading_title">Downloading A-SH %s</string>
+    <string name="update_cancel">Cancel download</string>
+    <string name="update_ready_title_v">A-SH %s is ready</string>
+    <string name="update_ready_detail">Installing restarts A-SH and closes its terminal tabs. Your herdr agents keep running on your computers.</string>
+    <string name="update_permission_title">One-time permission</string>
+    <string name="update_permission_detail">Android needs your OK for A-SH to install its own updates. Turn on "Allow from this source", then come back here and the install continues.</string>
+    <string name="update_permission_button">Open setting</string>
+    <string name="update_installing_title">Installing A-SH %s…</string>
+    <string name="update_installing_detail">A-SH closes and the new version is in place when you open it again.</string>
+    <string name="update_continue">Continue</string>
+    <string name="update_failed_title">The update didn\'t finish</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_release_page">Release page</string>
+    <string name="update_close">Close</string>
+    <string name="update_notes">What\'s new\n%s</string>
+    <string name="update_done_toast">Updated to A-SH %s</string>
+    <string name="update_err_offline">Can\'t reach GitHub. Check the connection and try again.</string>
+    <string name="update_err_ratelimit">GitHub is limiting requests from this network. Try again in a few minutes.</string>
+    <string name="update_err_dropped">The connection dropped. Try again and the download continues where it stopped.</string>
+    <string name="update_err_invalid">The download is damaged or isn\'t A-SH. Try again.</string>
+    <string name="update_err_not_newer">That release isn\'t newer than what\'s installed.</string>
+    <string name="update_err_aborted">The install was cancelled. Tap Install now to try again.</string>
+    <string name="update_err_blocked">Android blocked the install. %s</string>
+    <string name="update_err_conflict">This update is signed differently from the installed app, so Android won\'t replace it. %s</string>
+    <string name="update_err_incompatible">This update isn\'t compatible with this phone. %s</string>
+    <string name="update_err_storage">Not enough free storage to install the update.</string>
+    <string name="update_err_generic">Something went wrong: %s</string>
+    <string name="setting_updates_mobile_title">Download updates on mobile data</string>
+    <string name="setting_updates_mobile_summary">Updates are about 130 MB. Off: they download by themselves only on Wi-Fi; Check for updates always works.</string>
+    <string name="settings_group_notifications">Agent notifications</string>
+    <string name="setting_notify_needs_title">When an agent needs you</string>
+    <string name="setting_notify_needs_summary">It stopped to ask for an approval or an answer (herdr\'s "needs attention" ping)</string>
+    <string name="setting_notify_done_title">When an agent finishes</string>
+    <string name="setting_notify_done_summary">It completed its turn (herdr\'s "finished" ping)</string>
+    <string name="setting_notify_mutes_title">Follow herdr\'s per-agent mutes</string>
+    <string name="setting_notify_mutes_summary">Agents muted under [ui.sound.agents] in herdr\'s config stay quiet here too (droid is muted by default)</string>
+    <string name="board_channel_done_name">Agents finishing</string>
+    <string name="board_channel_done_description">An agent on one of your computers finished its turn</string>
     <string name="agents_button_icon" translatable="false">⊞</string>
     <string name="agents_button_description">Agent board</string>
     <string name="board_channel_name">Agents needing you</string>
@@ -158,11 +200,7 @@
     <string name="setting_board_on_launch_summary">Start on your herdr agents instead of a terminal tab when a computer is paired</string>
     <string name="settings_group_updates">Updates</string>
     <string name="setting_check_updates_title">Check for updates</string>
-    <string name="setting_check_updates_summary">Download the latest release and install it</string>
-    <string name="update_checking">Checking for updates…</string>
-    <string name="update_downloading">Downloading update…</string>
-    <string name="update_up_to_date">You\'re up to date (%s)</string>
-    <string name="update_check_failed">Couldn\'t check for updates: %s</string>
+    <string name="setting_check_updates_summary">See what\'s new, download and install it</string>
     <string name="update_debug_build">Debug builds don\'t self-update</string>
 
     <!-- Guest machine (full-system emulation) -->

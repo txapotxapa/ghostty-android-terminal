@@ -312,3 +312,32 @@ nav.tabs .dot { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 
 .star { width: 48px; height: 48px; border-radius: 24px; font-size: 22px; color: var(--faint); flex: none; }
 .star.on { color: var(--amber); }
 .star:active { background: var(--raised); }
+
+/* agent states */
+.krow.dim .who b { color: var(--muted); }
+.kstate { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; white-space: nowrap; flex: none; padding: 0 4px; }
+.kstate.ok { color: var(--mint-fg); }
+.kstate.warn { color: var(--amber-fg); }
+.kstate svg { width: 14px; height: 14px; }
+.krow .btn.sm { flex: none; }
+.krow .who span u { color: var(--amber-fg); text-decoration: underline; text-underline-offset: 2px; }
+.krow .who span.bad { color: var(--coral-fg); }
+.spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: rot .8s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+.agents-line { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border-radius: 12px; background: var(--well); border: 1px solid #1F2124; }
+.agents-line small { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: none; }
+.agents-line span { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.agents-line i { font-style: normal; font-size: 12px; padding: 2px 8px; border-radius: 8px; background: var(--mint-bg); color: var(--mint-fg); }
+.agents-line b { font-weight: 500; font-size: 13px; color: var(--mint); flex: none; }
+/* update banner */
+.upd { margin: 0 16px 12px; width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 12px;
+  background: #17231F; border: 1px solid #24443A; text-align: left; }
+.upd span { flex: 1; font-size: 13.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upd b { color: var(--mint); font-weight: 500; font-size: 13.5px; }
+.upd.failed { background: #2A1A17; border-color: var(--coral-line); } .upd.failed b { color: var(--coral-fg); }
+
+.btn.ghost { background: transparent; border-color: #34363B; color: var(--mint); }
+.krow .who em { font-style: normal; font-size: 12px; color: var(--amber-fg); white-space: normal; line-height: 1.35; margin-top: 2px; }
+.star-gap { width: 48px; flex: none; }
+.krow.sel { background: #17231F; border-radius: 12px; border-bottom-color: transparent; }
+.krow.sel .who b { color: var(--mint-fg); }

@@ -52,6 +52,11 @@ each one is doing right now.
   terminal view. Type or dictate in **Steer** to send it a prompt.
 - **+** starts a new agent: pick a computer, an agent (★ your favorites), a repo,
   optionally its own git worktree, and the first prompt.
+- **Agents you don't have yet install in one tap.** The agent list (and
+  **Computers → agents → Manage**) shows each one as **Ready**, **Downloads on
+  first use** (Omarchy's wrappers) or **Not installed**. Install uses mise, the
+  same packages Omarchy uses, adds herdr's status integration, and runs in a
+  herdr pane called "A-SH installs" so you can watch it on the computer.
 - **Shell** goes to the Ghostty terminal; **⊞** in the terminal's top bar comes back.
   Long-press a card to open it in a terminal tab, interrupt it or close it.
 
@@ -59,15 +64,21 @@ Nothing extra runs on the computer: the board talks to herdr over the same SSH
 pairing. Turn it off under **Settings → Agent board** if you'd rather start in a
 terminal.
 
+**Notifications** mirror herdr's own pings: an agent that **needs you** and one
+that **finished**. Each is a switch under **Settings → Agent notifications**,
+and agents herdr mutes (`[ui.sound.agents]`, droid by default) stay quiet here
+too. They arrive while A-SH is running, including in the background.
+
 ### After that
 
 - Reconnect: **long-press +** → **SSH → <computer name>**. Or type `ssh <computer name>`
   (herdr) or `ssh <computer name>-sh` (a plain shell) in any A-SH tab.
 - New phone, or reset the pairing: run `a-sh-pair` on the computer and scan again.
-- Updates are automatic. The app downloads new releases in the background and
-  installs them the next time you open it with no tabs running. The very first
-  time, Android asks you to allow **Install unknown apps** for A-SH: tap
-  **Settings**, switch it on, and go back. After that, updates are silent. Omarchy runs a daily background `pacman -Syu`, and the
+- Updates: **Settings → Updates → Check for updates** shows what's new and walks
+  through download, install and the one-time **Install unknown apps**
+  permission. New versions also download by themselves on Wi-Fi (switch on
+  mobile data in the same section) and a banner on the board offers to install
+  them. After the first in-app update, later ones install without any prompt. Omarchy runs a daily background `pacman -Syu`, and the
   computer updates herdr and `a-sh-pair` daily.
 
 ---

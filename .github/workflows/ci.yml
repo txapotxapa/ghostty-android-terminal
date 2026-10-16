@@ -160,6 +160,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: src
+
       - name: Download release APK
         id: apk
         uses: actions/download-artifact@v4
@@ -174,7 +179,18 @@ jobs:
         run: |
           apk=$(ls a-sh-qr-pair_v*.apk | head -n1)
           name=${apk%.apk}
+          # "What's new" in the app's update dialog: the commit subjects
+          # since the previous release.
+          prev=$(gh release list --repo "${{ github.repository }}" --limit 1 \
+            --json tagName --jq '.[0].tagName // empty')
+          git -C src fetch -q --tags origin || true
+          range=${{ github.sha }}
+          if [ -n "$prev" ] && git -C src rev-parse -q --verify "refs/tags/$prev" >/dev/null; then
+            range="$prev..${{ github.sha }}"
+          fi
+          { git -C src log --no-merges --format='- %s' "$range" | head -20; } > notes.md
+          [ -s notes.md ] || echo "- Maintenance build" > notes.md
           gh release create "$name" "$apk" \
             --repo "${{ github.repository }}" --target "${{ github.sha }}" \
             --title "$name" \
-            --notes "Automatic build of ${{ github.sha }}." --latest
+            --notes-file notes.md --latest

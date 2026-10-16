@@ -89,6 +89,7 @@ const KINDS = {
   kimi: { label: 'Kimi', short: 'ki', sub: 'Moonshot agent', bin: 'kimi' },
   droid: { label: 'Droid', short: 'dr', sub: 'Factory agent', bin: 'droid' },
   cursor: { label: 'Cursor Agent', short: 'cu', sub: 'Cursor CLI', bin: 'cursor-agent' },
+  grok: { label: 'Grok CLI', short: 'gr', sub: 'xAI coding agent', bin: 'grok' },
 };
 function kindMeta(k) { return KINDS[k] || { label: k || 'shell', short: k ? k.slice(0, 2) : '$', sub: '' }; }
 const STATUS = {
@@ -168,6 +169,8 @@ window.ash = {
       if (h.everOnline && was !== 'online') logEvent({ type: 'net', host, text: 'Reconnected to ' + host, sub: 'herdr ' + (h.info.herdr || '?') });
       h.everOnline = true;
       startPolling(h);
+      call(host, 'mutes').then((r) => { const m = {}; for (const l of r.out.split('\n')) { const i = l.indexOf('='); if (i > 0) m[l.slice(0, i)] = l.slice(i + 1); } h.mutes = m; }).catch(() => {});
+      h.agentStates = null;
     } else if (state === 'connecting') {
       h.state = 'connecting';
     } else {
@@ -181,6 +184,7 @@ window.ash = {
     render();
   },
   onDictation(id, text) { const f = dictations.get(id); if (f) { dictations.delete(id); f(text || ''); } },
+  updateChanged() { render(); },
   setVisible(v) { ui.visible = !!v; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (v) { render(); for (const h of hosts.values()) if (h.state === 'online') kick(h); } },
   setInsets(top, bottom) {
     document.documentElement.style.setProperty('--safe-top', top + 'px');
@@ -270,18 +274,36 @@ function applySnapshot(h, s) {
   render();
 }
 
+// Phone notifications mirror herdr's own pings: "needs attention" and
+// "finished", each switchable in Settings, muted per agent the way herdr's
+// [ui.sound.agents] mutes it (droid by default), and skipped for the agent
+// you're looking at.
+function notifyPrefs() {
+  try { return Object.assign({ needs: true, done: true, mutes: true }, JSON.parse(N.prefs())); } catch (e) { return { needs: true, done: true, mutes: true }; }
+}
+function mutedByHerdr(g) {
+  const m = hosts.get(g.host)?.mutes;
+  return !!m && (m[g.kind] === 'off' || m['*'] === 'false');
+}
+function pingPhone(g, kind, title) {
+  const p = notifyPrefs();
+  if (!(kind === 'needs' ? p.needs : p.done)) return;
+  if (p.mutes && mutedByHerdr(g)) return;
+  const watching = !document.hidden && ui.visible && cur().v === 'detail' && cur().key === g.key;
+  if (watching) return;
+  try { N.notify(g.key, title, where(g) + (hosts.size > 1 ? '' : ' · ' + g.host), kind); } catch (e) {}
+}
+
 function onTransition(g, prev, status) {
   const name = displayName(g);
   if (status === 'blocked') {
-    const ev = logEvent({ type: 'blocked', host: g.host, key: g.key, text: name + ' needs you', sub: where(g) });
-    if (document.hidden || !ui.visible || !(cur().v === 'detail' && cur().key === g.key)) {
-      try { N.notify(g.key, name + ' needs you', where(g)); } catch (e) {}
-    }
-    void ev;
+    logEvent({ type: 'blocked', host: g.host, key: g.key, text: name + ' needs you', sub: where(g) });
+    pingPhone(g, 'needs', name + ' needs you');
   } else {
     try { N.clearNotification(g.key); } catch (e) {}
     if ((status === 'done' || status === 'idle') && prev === 'working') {
       logEvent({ type: 'done', host: g.host, key: g.key, text: name + ' finished', sub: where(g) });
+      pingPhone(g, 'done', name + ' finished');
     }
     if (status === 'working' && prev === 'blocked') {
       logEvent({ type: 'working', host: g.host, key: g.key, text: name + ' is back to work', sub: where(g) });
@@ -792,7 +814,18 @@ function viewBoard() {
   return `<header class="top"><div class="top-row"><div class="h1">Agents</div>
       <button class="fab" data-act="new" aria-label="New agent">${I.plus}</button></div>
       <button class="sub" data-act="go" data-v="computers" data-k="sub">${sub}</button></header>
+    <div data-k="upd">${updateBanner()}</div>
     <main class="scroll" data-k="board">${body}</main>`;
+}
+
+function updateBanner() {
+  let u = null;
+  try { u = JSON.parse(N.updateInfo()); } catch (e) {}
+  if (!u || !/available|ready|downloading|failed|permission/.test(u.state)) return '';
+  const txt = u.state === 'downloading' ? `Downloading A-SH ${esc(u.version)} · ${u.percent || 0}%`
+    : u.state === 'failed' ? `Update didn't finish: ${esc(u.error || 'tap for details')}`
+    : `A-SH ${esc(u.version)} is ${u.state === 'ready' ? 'ready to install' : 'available'}`;
+  return `<button class="upd ${u.state}" data-act="open-update"><span>${txt}</span><b>${u.state === 'failed' ? 'Details' : u.state === 'downloading' ? 'View' : u.state === 'ready' ? 'Install' : 'Update'} ›</b></button>`;
 }
 
 function card(g) {
@@ -1094,18 +1127,120 @@ function sheetPane(s) {
     <div class="foot"><div class="row"><button class="btn" data-act="pane-close" ${h ? '' : 'disabled'}>Close pane</button><button class="btn primary" data-act="pane-open">${I.term} Open terminal</button></div></div>`;
 }
 
-function sheetKinds() {
-  const v = cur(); const h = hosts.get(v.host);
-  const inst = [...installedKinds(h), 'shell'];
+// ---- agents on a computer: installed? ready? install them
+
+const AGENT_STATE = {
+  ready: { label: 'Ready', cls: 'ok' },
+  firstrun: { label: 'Downloads on first use', cls: 'warn' },
+  missing: { label: 'Not installed', cls: 'off' },
+};
+const installs = new Map();   // "host|kind" -> { pane, line, state: running|done|failed, rc }
+
+async function loadAgentStates(h, force) {
+  if (!h || h.state !== 'online') return;
+  if (h.agentStates && !force && now() - h.agentsAt < 60000) return;
+  const r = await call(h.name, 'agents');
+  const m = {};
+  for (const l of r.out.split('\n')) { const [k, st, ig] = l.split('\t'); if (k) m[k] = { state: st, integ: ig }; }
+  h.agentStates = m; h.agentsAt = now();
+  render();
+}
+function agentState(h, k) { return k === 'shell' ? { state: 'ready', integ: 'none' } : h?.agentStates?.[k] || null; }
+function installedKinds(h) { return Object.keys(h?.agentStates || {}).filter((k) => h.agentStates[k].state !== 'missing'); }
+function kindLabel(id) { return id === 'shell' ? 'Plain shell' : KINDS[id]?.label || id; }
+function kindSub(id) { return id === 'shell' ? 'A herdr pane, no agent' : KINDS[id]?.sub || ''; }
+
+async function ensureInstallsWorkspace(h) {
+  const label = 'A-SH installs';
+  const ws = (h.snap?.workspaces || []).find((w) => w.label === label);
+  if (ws) return findPane(await herdr(h.name, 'tab', 'create', '--workspace', ws.workspace_id, '--cwd', h.info.home || '~', '--no-focus'));
+  return findPane(await herdr(h.name, 'workspace', 'create', '--cwd', h.info.home || '~', '--label', label, '--no-focus'));
+}
+
+// Installs (or, for a first-use wrapper, downloads) one agent in a herdr pane
+// on the computer, so it's visible there too. Resolves true on success.
+function installAgent(hostName, kind) {
+  const key = hostName + '|' + kind;
+  const running = installs.get(key);
+  if (running && running.state === 'running') return running.promise;
+  const job = { state: 'running', line: 'Preparing…', pane: '', host: hostName, kind, t0: now() };
+  installs.set(key, job);
+  render();
+  job.promise = (async () => {
+    const h = hosts.get(hostName);
+    try {
+      const prep = await call(hostName, 'install-prep', kind);
+      if (prep.rc !== 0 || !prep.out.trim()) throw new Error('no install recipe for ' + kind);
+      job.pane = await ensureInstallsWorkspace(h);
+      if (!job.pane) throw new Error('herdr didn\'t open a pane');
+      await herdr(hostName, 'pane', 'run', job.pane, 'bash ' + prep.out.trim());
+      for (;;) {
+        await sleep(1500);
+        if (now() - job.t0 > 20 * 60000) throw new Error('timed out after 20 minutes');
+        const r = await call(hostName, 'herdr', 'pane', 'read', job.pane, '--source', 'recent', '--lines', '40');
+        const ls = cleanTail(r.out);
+        const done = r.out.match(/A-SH-INSTALL-DONE (\d+)/);
+        const last = ls.filter((l) => !/A-SH-INSTALL-DONE/.test(l)).pop();
+        if (last) job.line = last.replace(/^== /, '');
+        render();
+        if (done) { job.rc = +done[1]; break; }
+      }
+      if (job.rc !== 0) throw new Error(job.line || 'install failed');
+      job.state = 'done';
+      await loadAgentStates(h, true).catch(() => {});
+      herdr(hostName, 'pane', 'close', job.pane).catch(() => {});
+      toast(kindLabel(kind) + ' is ready on ' + hostName);
+      logEvent({ type: 'done', host: hostName, text: kindLabel(kind) + ' installed', sub: hostName });
+      return true;
+    } catch (e) {
+      job.state = 'failed'; job.line = e.message;
+      toast('Couldn\'t install ' + kindLabel(kind) + ': ' + e.message);
+      return false;
+    } finally { render(); }
+  })();
+  return job.promise;
+}
+
+function agentRow(h, k, mode, v) {
+  const st = agentState(h, k) || { state: 'missing', integ: 'none' };
+  const job = installs.get(h.name + '|' + k);
   const f = favs();
-  const row = (k) => `<div class="krow"><button class="kpick" data-act="kind-pick" data-kind="${k}"><span class="badge">${esc(k === 'shell' ? '$' : kindMeta(k).short)}</span>
-      <span class="who"><b>${esc(kindLabel(k))}</b><span>${esc(kindSub(k))}</span></span>${v.kind === k ? `<span class="ck">${I.check}</span>` : ''}</button>
-    <button class="star${f.includes(k) ? ' on' : ''}" data-act="kind-fav" data-kind="${k}" aria-label="${f.includes(k) ? 'Remove from' : 'Add to'} favorites">${f.includes(k) ? '★' : '☆'}</button></div>`;
-  const fav = inst.filter((k) => f.includes(k)), rest = inst.filter((k) => !f.includes(k));
-  return `<div class="grip"></div><h2>Choose an agent</h2><div class="meta">Installed on ${esc(v.host)} · ★ keeps one at the top</div>
-    <div class="body">${fav.length ? `<div class="section-label">Favorites</div>${fav.map(row).join('')}` : ''}
-      <div class="section-label">${fav.length ? 'Everything else' : 'Installed'}</div>${rest.map(row).join('')}
-      <p class="note" style="margin:12px 2px 4px">Missing one? Install its CLI on ${esc(v.host)} and it shows up here.</p></div>`;
+  const selectable = mode === 'pick' && st.state !== 'missing';
+  let right;
+  if (job && job.state === 'running') right = `<span class="kstate warn"><i class="spin"></i>Installing</span>`;
+  else if (st.state === 'missing') right = `<button class="btn sm ghost" data-act="agent-install" data-h="${esc(h.name)}" data-kind="${k}">Install</button>`;
+  else if (st.state === 'firstrun') right = `<button class="btn sm" data-act="agent-install" data-h="${esc(h.name)}" data-kind="${k}">Download</button>`;
+  else right = `<span class="kstate ok">${I.check}Ready</span>`;
+  const sub = job && (job.state === 'running' || job.state === 'failed')
+    ? `<span class="${job.state === 'failed' ? 'bad' : ''}">${esc(job.line)}</span>`
+    : `<span>${esc(kindSub(k))}${st.state === 'firstrun' ? ' · downloads on first start' : ''}</span>${st.state === 'ready' && st.integ === 'missing' ? '<em data-act="agent-integ" data-h="' + esc(h.name) + '" data-kind="' + k + '">⚠ herdr guesses its status · tap to add the integration</em>' : ''}`;
+  const body = `<span class="badge">${esc(k === 'shell' ? '$' : kindMeta(k).short)}</span><span class="who"><b>${esc(kindLabel(k))}</b>${sub}</span>`;
+  return `<div class="krow${st.state === 'missing' ? ' dim' : ''}${mode === 'pick' && v?.kind === k ? ' sel' : ''}">
+    ${selectable ? `<button class="kpick${v?.kind === k ? ' sel' : ''}" data-act="kind-pick" data-kind="${k}" aria-pressed="${v?.kind === k}">${body}</button>` : `<div class="kpick">${body}</div>`}
+    ${k === 'shell' ? '' : `${right}${st.state === 'missing' ? '<span class="star-gap"></span>' : `<button class="star${f.includes(k) ? ' on' : ''}" data-act="kind-fav" data-kind="${k}" aria-label="${f.includes(k) ? 'Remove from' : 'Add to'} favorites">${f.includes(k) ? '★' : '☆'}</button>`}`}</div>`;
+}
+
+function sheetKinds(s) {
+  const mode = s.mode || 'pick';
+  const v = mode === 'pick' ? cur() : null;
+  const h = hosts.get(mode === 'pick' ? v.host : s.host);
+  if (!h) return '';
+  if (!h.agentStates) return `<div class="grip"></div><h2>Agents on ${esc(h.name)}</h2><div class="body"><div class="skel" style="height:220px"></div></div>`;
+  const all = Object.keys(h.agentStates);
+  const f = favs();
+  const ready = all.filter((k) => h.agentStates[k].state === 'ready');
+  const first = all.filter((k) => h.agentStates[k].state === 'firstrun');
+  const missing = all.filter((k) => h.agentStates[k].state === 'missing');
+  const favRow = [...ready, ...first].filter((k) => f.includes(k));
+  const sec = (label, list) => (list.length ? `<div class="section-label">${label}</div>${list.map((k) => agentRow(h, k, mode, v)).join('')}` : '');
+  return `<div class="grip"></div><h2>${mode === 'pick' ? 'Choose an agent' : 'Agents on ' + esc(h.name)}</h2>
+    <div class="meta">${ready.length} ready${first.length ? ' · ' + first.length + ' download on first use' : ''} · ${missing.length} more to install</div>
+    <div class="body">
+      ${sec('Favorites', favRow)}
+      ${sec('Ready', ready.filter((k) => !f.includes(k)).concat(mode === 'pick' ? ['shell'] : []))}
+      ${sec('Downloads on first use', first.filter((k) => !f.includes(k)))}
+      ${sec('Not installed · one tap installs it on ' + esc(h.name), missing)}
+      <p class="note" style="margin:12px 2px 4px">Installs use mise, the same way Omarchy does, and run in a herdr pane on ${esc(h.name)} named "A-SH installs" so you can watch them there. ★ pins an agent to the top and to the quick picks.</p></div>`;
 }
 
 function closeSheet() { ui.sheet = null; render(); }
@@ -1114,7 +1249,7 @@ function renderSheet() {
   if (!ui.sheet) { if (host) host.remove(); return; }
   if (!host) { host = document.createElement('div'); host.id = 'sheet-host'; document.body.appendChild(host); host.innerHTML = '<div class="scrim" data-act="close-sheet"></div><div class="sheet" role="dialog"></div>'; }
   const s = ui.sheet;
-  const html = s.type === 'kinds' ? sheetKinds() : s.type === 'review' ? sheetReview(s) : s.type === 'menu' ? sheetMenu(s) : s.type === 'confirm' ? sheetConfirm(s) : s.type === 'pane' ? sheetPane(s) : '';
+  const html = s.type === 'kinds' ? sheetKinds(s) : s.type === 'review' ? sheetReview(s) : s.type === 'menu' ? sheetMenu(s) : s.type === 'confirm' ? sheetConfirm(s) : s.type === 'pane' ? sheetPane(s) : '';
   const sh = $('.sheet', host);
   if (sh.dataset.html === html) return;
   const ta = $('#amend', sh); const typed = ta ? ta.value : '';
@@ -1132,7 +1267,7 @@ function newAgent() {
 async function loadNewOptions(v) {
   const h = hosts.get(v.host); if (!h || h.state !== 'online') return;
   try {
-    if (!h.bins) h.bins = (await call(h.name, 'which', ...Object.values(KINDS).map((k) => k.bin))).out.split('\n').filter(Boolean);
+    await loadAgentStates(h);
     if (!h.repos) h.repos = (await call(h.name, 'repos')).out.split('\n').filter(Boolean).map((l) => { const [p, b] = l.split('\t'); return { path: p, branch: b }; });
   } catch (e) { toast(e.message); }
   if (!v.kind) {
@@ -1143,15 +1278,14 @@ async function loadNewOptions(v) {
   if (!v.folder) v.folder = h.repos?.[0]?.path || h.info.home || '';
   render();
 }
-function installedKinds(h) { return Object.entries(KINDS).filter(([, k]) => !h?.bins || h.bins.includes(k.bin)).map(([id]) => id); }
-function kindLabel(id) { return id === 'shell' ? 'Plain shell' : KINDS[id]?.label || id; }
-function kindSub(id) { return id === 'shell' ? 'A herdr pane, no agent' : KINDS[id]?.sub || ''; }
 
 function viewNew(v) {
   const hs = [...hosts.values()];
   const h = hosts.get(v.host);
-  const bins = h?.bins;
-  const quick = [...new Set([...favs(), v.kind])].filter((k) => k === 'shell' || (bins && bins.includes(KINDS[k]?.bin)));
+  const bins = h?.agentStates;
+  const inst = installedKinds(h);
+  const quick = [...new Set([...favs(), v.kind])].filter((k) => k === 'shell' || inst.includes(k));
+  const kst = agentState(h, v.kind);
   const folders = [];
   const seen = new Set();
   for (const r of h?.repos || []) if (!seen.has(r.path)) { seen.add(r.path); folders.push(r); }
@@ -1166,7 +1300,7 @@ function viewNew(v) {
       <div class="label">Agent</div>
       ${!bins ? '<div class="skel" style="height:62px"></div>' : `<button class="select" data-act="pick-kind" aria-haspopup="dialog">
         <span class="badge">${esc(v.kind === 'shell' ? '$' : kindMeta(v.kind).short)}</span>
-        <span class="who"><b>${esc(kindLabel(v.kind))}</b><span>${esc(kindSub(v.kind))}</span></span>
+        <span class="who"><b>${esc(kindLabel(v.kind))}</b><span>${esc(kst?.state === 'firstrun' ? 'Downloads when it first starts' : kindSub(v.kind))}</span></span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
       ${quick.length > 1 ? `<div class="chips" style="padding:2px 0 0">${quick.map((k) => `<button class="chip" data-act="new-kind" data-kind="${k}" aria-pressed="${v.kind === k}">${favs().includes(k) ? '★ ' : ''}${esc(kindLabel(k))}</button>`).join('')}</div>` : ''}`}
       <div class="label">Folder</div>
@@ -1199,6 +1333,10 @@ async function startAgent(v) {
     if (!pane) throw new Error('herdr didn\'t return a pane');
     const key = h.name + '|' + pane;
     if (v.kind === 'shell') { v.busy = ''; ui.stack.pop(); render(); toast('Shell opened in herdr'); try { N.openTerminal(h.name, pane); } catch (e) {} return; }
+    if (agentState(h, v.kind)?.state === 'firstrun') {
+      v.busy = 'Downloading ' + kindLabel(v.kind) + '…'; render();
+      if (!(await installAgent(h.name, v.kind))) throw new Error(kindLabel(v.kind) + ' didn\'t download');
+    }
     v.busy = 'Starting ' + (KINDS[v.kind]?.label || v.kind) + '…'; render();
     let blocked = false;
     try { await herdr(h.name, 'agent', 'start', slug, '--kind', v.kind, '--pane', pane, '--timeout', '45000'); }
@@ -1254,6 +1392,7 @@ function viewActivity() {
 
 function viewComputers() {
   const hs = [...hosts.values()];
+  for (const h of hs) if (h.state === 'online' && !h.agentStates && !h.agentsLoading) { h.agentsLoading = true; loadAgentStates(h).catch(() => {}).finally(() => { h.agentsLoading = false; }); }
   return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button><div class="plain">Computers</div></div>
     <div class="scroll" data-k="hosts"><div class="hosts">
       ${hs.map((h) => {
@@ -1268,6 +1407,8 @@ function viewComputers() {
             <div><small>address</small><span>${esc(h.address || '—')}</span></div>
             <div><small>uptime</small><span>${esc(shortUptime(h.info.uptime))}</span></div></div>`
             : `<p style="margin:0;color:var(--muted);font-size:14px">${esc(offlineReason(h))}</p>`}
+          ${on ? `<button class="agents-line" data-act="manage-agents" data-h="${esc(h.name)}"><small>agents</small>
+            <span>${h.agentStates ? installedKinds(h).map((k) => `<i>${esc(kindLabel(k))}</i>`).join('') || 'none yet' : '…'}</span><b>Manage ›</b></button>` : ''}
           <div class="row"><button class="btn" data-act="reconnect" data-h="${esc(h.name)}">${I.refresh} Reconnect</button>
             <button class="btn" data-act="open-shell" data-h="${esc(h.name)}">${I.term} Shell</button></div></div>`;
       }).join('')}
@@ -1376,9 +1517,23 @@ document.addEventListener('click', async (e) => {
     case 'new-kind': { const v = cur(); v.kind = el.dataset.kind; render(); break; }
     case 'new-folder': { const v = cur(); v.folder = el.dataset.path; render(); break; }
     case 'new-wt': { const v = cur(); v.worktree = !v.worktree; render(); break; }
-    case 'pick-kind': ui.sheet = { type: 'kinds' }; render(); break;
+    case 'pick-kind': ui.sheet = { type: 'kinds', mode: 'pick' }; render(); loadAgentStates(hosts.get(cur().host), true).catch(() => {}); break;
     case 'kind-pick': { const v = cur(); if (v.v === 'new') v.kind = el.dataset.kind; closeSheet(); break; }
     case 'kind-fav': toggleFav(el.dataset.kind); haptic(); render(); break;
+    case 'agent-install': {
+      haptic();
+      const hn = el.dataset.h, k = el.dataset.kind;
+      installAgent(hn, k).then((ok) => { const v = cur(); if (ok && v.v === 'new' && v.host === hn && ui.sheet?.type === 'kinds') { v.kind = k; render(); } });
+      break;
+    }
+    case 'agent-integ': {
+      e.stopPropagation();
+      const hn = el.dataset.h, k = el.dataset.kind;
+      herdr(hn, 'integration', 'install', k).then(() => { toast('herdr now tracks ' + kindLabel(k) + ' precisely'); loadAgentStates(hosts.get(hn), true); }).catch((x) => toast(x.message));
+      break;
+    }
+    case 'manage-agents': { const h = hosts.get(el.dataset.h); ui.sheet = { type: 'kinds', mode: 'manage', host: el.dataset.h }; render(); loadAgentStates(h, true).catch((x) => toast(x.message)); break; }
+    case 'open-update': try { N.openUpdates(); } catch (x) {} break;
     case 'new-start': startAgent(cur()); break;
   }
 });
