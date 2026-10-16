@@ -23,6 +23,7 @@ public final class AppSettings {
 
     private static final String FILE = "settings";
     private static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";
+    private static final String KEY_BOARD_ON_LAUNCH = "board_on_launch";
     private static final String KEY_IMMERSIVE_MODE = "immersive_mode";
     private static final String KEY_RICH_KEYBOARD = "rich_keyboard";
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_enabled";
@@ -116,6 +117,15 @@ public final class AppSettings {
 
     public void setKeepScreenOn(boolean enabled) {
         prefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, enabled).apply();
+    }
+
+    /** When true, the app opens on the agent board (once a computer is paired). */
+    public boolean boardOnLaunch() {
+        return prefs.getBoolean(KEY_BOARD_ON_LAUNCH, true);
+    }
+
+    public void setBoardOnLaunch(boolean enabled) {
+        prefs.edit().putBoolean(KEY_BOARD_ON_LAUNCH, enabled).apply();
     }
 
     /** When true, hide the status and navigation bars while the terminal is foreground. */

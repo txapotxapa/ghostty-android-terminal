@@ -148,6 +148,14 @@
     <string name="update_install_now">Install now</string>
     <string name="update_later">Next launch</string>
     <string name="update_failed">Update failed: %s</string>
+    <string name="agents_button_icon" translatable="false">⊞</string>
+    <string name="agents_button_description">Agent board</string>
+    <string name="board_channel_name">Agents needing you</string>
+    <string name="board_channel_description">An agent on one of your computers is waiting for an answer or approval</string>
+    <string name="board_dictate_prompt">Tell the agent what to do</string>
+    <string name="board_no_dictation">No voice input app on this phone</string>
+    <string name="setting_board_on_launch_title">Open the agent board on launch</string>
+    <string name="setting_board_on_launch_summary">Start on your herdr agents instead of a terminal tab when a computer is paired</string>
     <string name="settings_group_updates">Updates</string>
     <string name="setting_check_updates_title">Check for updates</string>
     <string name="setting_check_updates_summary">Download the latest release and install it</string>

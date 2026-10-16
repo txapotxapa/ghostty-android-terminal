@@ -62,6 +62,7 @@ final class Glyphs {
         MAP.put(0x2630, R.drawable.ic_glyph_drag);         // ☰
         MAP.put(0x1F50D, R.drawable.ic_glyph_search);      // 🔍 (surrogate pair)
         MAP.put(0x2699, R.drawable.ic_glyph_settings);     // ⚙
+        MAP.put(0x229E, R.drawable.ic_glyph_agents);       // ⊞ (agent board)
     }
 
     /**

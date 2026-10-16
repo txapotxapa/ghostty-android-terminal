@@ -37,6 +37,28 @@ If the camera doesn't offer to open it, copy the `ash://…` link printed under 
 QR to the phone (e.g. any messaging app), then in A-SH **long-press +** →
 **Paste pairing link**.
 
+### The agent board
+
+Once a computer is paired, A-SH opens on the **agent board**: every
+[herdr](https://herdr.dev) agent on every paired computer, live, with what
+each one is doing right now.
+
+- **Needs you** cards rise to the top, and the phone gets a notification when an
+  agent stops to ask something. Tap **Review** to see the command, edit or
+  question and answer it (approve, reject, pick an option or type your own answer).
+- Tap an agent for **Chat** (the conversation), **Trace** (each tool call with
+  its output) or **Terminal** (the live screen, plus Esc / arrows / Enter keys).
+  Chat and Trace work for Claude Code and oh-my-pi; other agents get the
+  terminal view. Type or dictate in **Steer** to send it a prompt.
+- **+** starts a new agent: pick a computer, an agent (★ your favorites), a repo,
+  optionally its own git worktree, and the first prompt.
+- **Shell** goes to the Ghostty terminal; **⊞** in the terminal's top bar comes back.
+  Long-press a card to open it in a terminal tab, interrupt it or close it.
+
+Nothing extra runs on the computer: the board talks to herdr over the same SSH
+pairing. Turn it off under **Settings → Agent board** if you'd rather start in a
+terminal.
+
 ### After that
 
 - Reconnect: **long-press +** → **SSH → <computer name>**. Or type `ssh <computer name>`

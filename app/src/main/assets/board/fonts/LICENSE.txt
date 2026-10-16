@@ -1,0 +1,8 @@
+Fonts bundled with the A-SH agent board, all under the SIL Open Font License 1.1
+(https://openfontlicense.org):
+
+- IBM Plex Sans — Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
+- JetBrains Mono — Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono)
+
+Latin subsets taken unmodified from Fontsource (https://fontsource.org).

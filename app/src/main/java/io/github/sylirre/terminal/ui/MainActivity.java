@@ -29,6 +29,7 @@ import android.provider.Settings;
 import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -89,6 +90,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private static final int REQ_BACKUP = 100;
     private static final int REQ_RESTORE = 101;
     private static final int REQ_SETTINGS = 102;
+    private static final String STATE_BOARD = "board_visible";
+    private static final int BOARD_GROUND = 0xFF121314;
     private static final int REQ_ONBOARDING = 103;
     private static final String PREF_ASKED_BATTERY_OPT = "asked_ignore_battery_opt";
     private static final long BELL_VIBRATION_MS = 300;
@@ -112,6 +115,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     /** A QR pairing link that arrived before a tab could be opened for it. */
     private String pendingSshLink;
     private AppSettings settings;
+    /** The agent board over the terminal UI; created on first show. */
+    private BoardView board;
     private ThemeStore themeStore;
     private ExtraKeysConfig extraKeysConfig;
     private boolean forceShell;
@@ -179,6 +184,15 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         applyTextMargins();
         findViewById(R.id.settings_button).setOnClickListener(this::openSettings);
         Glyphs.applyTo(findViewById(R.id.settings_button));
+        findViewById(R.id.agents_button).setOnClickListener(v -> showBoard(true));
+        Glyphs.applyTo(findViewById(R.id.agents_button));
+        boolean startOnBoard = savedInstanceState != null
+                ? savedInstanceState.getBoolean(STATE_BOARD, false)
+                : !forceShell && pendingSshLink == null && settings.boardOnLaunch()
+                        && !awaitingOnboarding && UserlandRootfs.isInstalled(this)
+                        && !SshLinks.savedHosts(this).isEmpty();
+        if (startOnBoard || getIntent().hasExtra(BoardView.EXTRA_HOST)) showBoard(true);
+        openBoardAgentFrom(getIntent());
 
         searchBar = findViewById(R.id.search_bar);
         searchBar.setListener(new SearchBarView.Listener() {
@@ -308,6 +322,11 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (intent.hasExtra(BoardView.EXTRA_HOST)) {
+            showBoard(true);
+            openBoardAgentFrom(intent);
+            return;
+        }
         String link = SshLinks.fromIntent(intent);
         if (link == null) return;
         // singleTask: a scan while the app runs lands here. Before the first
@@ -327,7 +346,13 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         // sessions (and seeds the first paint).
         applyAllSettings();
         disableStorageBindingIfPermissionRevoked();
-        if (current != null && settings.touchKeyboard()) showKeyboard();
+        if (boardVisible()) {
+            board.hostsChanged();
+            board.blur();
+            InputMethodManager imm = getSystemService(InputMethodManager.class);
+            if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
+        }
+        else if (current != null && settings.touchKeyboard()) showKeyboard();
     }
 
     /**
@@ -359,6 +384,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     protected void onDestroy() {
         super.onDestroy();
         SessionService.clearExitListener(onServiceExit);
+        if (board != null) {
+            board.destroy();
+            board = null;
+        }
         if (bellTone != null) {
             bellTone.release(); // frees the native audio track it holds
             bellTone = null;
@@ -397,7 +426,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
      */
     private void applyChrome(ChromePalette p) {
         chrome = p;
-        findViewById(R.id.root).setBackgroundColor(p.surface1);
+        findViewById(R.id.root).setBackgroundColor(boardVisible() ? BOARD_GROUND : p.surface1);
         mainTopBar.setBackground(p.barSurface(true));
         styleTopBarButton(promptPrevButton);
         styleTopBarButton(promptNextButton);
@@ -529,6 +558,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                     Toast.LENGTH_LONG).show();
             return;
         }
+        showBoard(false);
         createSession(true);
         if (current != null && current.isUserland()) {
             current.write(SshLinks.pairCommand(link));
@@ -542,6 +572,77 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         if (current != null && current.isUserland()) {
             current.write(SshLinks.connectCommand(name));
         }
+    }
+
+    // --- agent board ---------------------------------------------------------
+
+    private boolean boardVisible() {
+        return board != null && board.isVisible();
+    }
+
+    /** Shows the agent board over the terminal UI, or goes back to the terminal. */
+    private void showBoard(boolean show) {
+        if (!show && board == null) return;
+        if (board == null) {
+            board = new BoardView(this, new BoardView.Host() {
+                @Override
+                public void boardShowShell() {
+                    showBoard(false);
+                    if (sessions.isEmpty()) createSession(userlandByDefault());
+                }
+
+                @Override
+                public void boardOpenTab(String command) {
+                    showBoard(false);
+                    createSession(true);
+                    if (current != null && current.isUserland()) current.write(command + "\r");
+                }
+
+                @Override
+                public void boardScanQr() {
+                    scanPairingQr();
+                }
+
+                @Override
+                public void boardPastePairing() {
+                    pastePairingLink();
+                }
+
+                @Override
+                public UserlandOptions boardUserlandOptions() {
+                    return currentUserlandOptions(false);
+                }
+            });
+            android.widget.FrameLayout boardHost = findViewById(R.id.board_host);
+            boardHost.addView(board.view(), new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        findViewById(R.id.board_host).setVisibility(show ? View.VISIBLE : View.GONE);
+        board.setVisible(show);
+        if (show) {
+            InputMethodManager imm = getSystemService(InputMethodManager.class);
+            if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
+            findViewById(R.id.root).setBackgroundColor(BOARD_GROUND);
+        } else {
+            applyTheme();
+            terminal.requestFocus();
+            if (current != null && settings.touchKeyboard()) showKeyboard();
+        }
+    }
+
+    /** A "needs you" notification was tapped: open that agent on the board. */
+    private void openBoardAgentFrom(Intent intent) {
+        String h = intent.getStringExtra(BoardView.EXTRA_HOST);
+        String pane = intent.getStringExtra(BoardView.EXTRA_PANE);
+        if (h == null || pane == null || board == null) return;
+        intent.removeExtra(BoardView.EXTRA_HOST);
+        board.openAgent(h, pane);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putBoolean(STATE_BOARD, boardVisible());
     }
 
     /**
@@ -592,15 +693,20 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 .show();
     }
 
+    private UserlandOptions currentUserlandOptions(boolean bindStorage) {
+        return new UserlandOptions(
+                settings.userlandLoginShell(), bindStorage,
+                settings.userlandIdentity(), settings.userlandHome(),
+                settings.userlandWorkDir(), settings.userlandLocale(),
+                settings.userlandPath(),
+                settings.userlandJitEnabled(), settings.userlandJitBufferMb(),
+                settings.userlandChrootNgEnabled());
+    }
+
     private void createSession(boolean userland) {
         try {
-            UserlandOptions userlandOptions = new UserlandOptions(
-                    settings.userlandLoginShell(), storageBindingEnabledForNewSession(),
-                    settings.userlandIdentity(), settings.userlandHome(),
-                    settings.userlandWorkDir(), settings.userlandLocale(),
-                    settings.userlandPath(),
-                    settings.userlandJitEnabled(), settings.userlandJitBufferMb(),
-                    settings.userlandChrootNgEnabled());
+            UserlandOptions userlandOptions =
+                    currentUserlandOptions(storageBindingEnabledForNewSession());
             TerminalSession s = sessions.create(this,
                     terminal.gridCols(), terminal.gridRows(),
                     terminal.cellWidthPx(), terminal.cellHeightPx(),
@@ -608,7 +714,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                     settings.terminateProcessesOnExit(), this);
             switchTo(s);
             applyTheme(); // color the new session before any output arrives
-            if (settings.touchKeyboard()) showKeyboard();
+            if (settings.touchKeyboard() && !boardVisible()) showKeyboard();
             // Promote the process to foreground priority so the shell
             // survives backgrounding; refresh updates the session count.
             SessionService.refresh(this);
@@ -947,6 +1053,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
      * consumed here rather than leaving the app.
      */
     private boolean handleBack() {
+        if (boardVisible()) {
+            board.back();
+            return true;
+        }
         if (searchBar == null || !searchBar.isOpen()) return false;
         hideSearch();
         return true;
@@ -1085,6 +1195,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == BoardView.REQ_DICTATE) {
+            if (board != null) board.onDictation(resultCode, data);
+            return;
+        }
         if (requestCode == REQ_ONBOARDING) {
             awaitingOnboarding = false;
             maybeRequestNotificationsPermission(); // deferred from onCreate

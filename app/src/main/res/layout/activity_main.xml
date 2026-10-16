@@ -65,6 +65,21 @@
                 android:visibility="gone" />
 
             <TextView
+                android:id="@+id/agents_button"
+                android:layout_width="@dimen/icon_button"
+                android:layout_height="@dimen/icon_button"
+                android:layout_marginStart="@dimen/space_1"
+                android:layout_gravity="center_vertical"
+                android:gravity="center"
+                android:text="@string/agents_button_icon"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_icon_glyph"
+                android:background="@drawable/bg_chip"
+                android:contentDescription="@string/agents_button_description"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
                 android:id="@+id/search_button"
                 android:layout_width="@dimen/icon_button"
                 android:layout_height="@dimen/icon_button"
@@ -121,6 +136,13 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:layout_marginTop="@dimen/top_bar_height"
+        android:visibility="gone" />
+
+    <!-- Agent board (BoardView): a WebView added here at runtime, over the terminal UI. -->
+    <FrameLayout
+        android:id="@+id/board_host"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:visibility="gone" />
 
 </FrameLayout>

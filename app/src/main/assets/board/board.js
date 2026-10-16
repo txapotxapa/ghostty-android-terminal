@@ -1,0 +1,1402 @@
+/* A-SH agent board: herdr agents on every paired computer, live.
+ *
+ * The Android side (AshNative, see BoardBridge.java) keeps one SSH session
+ * per computer running bridge.sh, and relays request/reply lines. Everything
+ * else — polling, the activity feed, parsing agent session logs into chat
+ * and trace views, reading approval menus off the screen — happens here.
+ */
+'use strict';
+
+const N = window.AshNative;
+const $ = (s, el = document) => el.querySelector(s);
+
+// ---------------------------------------------------------------- utilities
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+function b64e(s) {
+  const b = enc.encode(s); let bin = '';
+  for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64d(s) {
+  if (!s) return '';
+  const bin = atob(s); const b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return dec.decode(b);
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const now = () => Date.now();
+function clock(t) { return new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+function ago(t) {
+  const s = Math.max(0, (now() - t) / 1000);
+  if (s < 45) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  return Math.round(s / 86400) + 'd ago';
+}
+function mmss(ms) {
+  if (!(ms >= 0)) return '—';
+  const s = Math.round(ms / 1000);
+  if (s >= 3600) return Math.floor(s / 3600) + 'h' + String(Math.floor(s % 3600 / 60)).padStart(2, '0');
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function compact(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n); }
+function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+function basename(p) { p = String(p || '').replace(/\/+$/, ''); return p.slice(p.lastIndexOf('/') + 1) || '/'; }
+
+const I = {
+  plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>',
+  grid: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
+  shell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8l4 4-4 4M12 17h7"/></svg>',
+  list: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+  back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>',
+  close: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  mic: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  laptop: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>',
+  copy: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>',
+  qr: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8"/></svg>',
+  term: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>',
+  trash: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg>',
+  refresh: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
+  link: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+};
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function haptic() { try { N.haptic(); } catch (e) {} }
+
+// ---------------------------------------------------------- harness metadata
+
+const KINDS = {
+  claude: { label: 'Claude Code', short: 'cc', sub: 'Anthropic · chat + trace', bin: 'claude' },
+  omp: { label: 'oh-my-pi', short: 'omp', sub: 'coding, subagents', bin: 'omp' },
+  pi: { label: 'Pi', short: 'π', sub: 'minimal coding agent', bin: 'pi' },
+  hermes: { label: 'Hermes', short: 'H', sub: 'skills, memory', bin: 'hermes' },
+  codex: { label: 'Codex', short: 'cx', sub: 'OpenAI coding agent', bin: 'codex' },
+  gemini: { label: 'Gemini CLI', short: 'G', sub: 'Google coding agent', bin: 'gemini' },
+  opencode: { label: 'OpenCode', short: 'oc', sub: 'open-source agent', bin: 'opencode' },
+  amp: { label: 'Amp', short: 'amp', sub: 'Sourcegraph agent', bin: 'amp' },
+  copilot: { label: 'Copilot CLI', short: 'gh', sub: 'GitHub agent', bin: 'copilot' },
+  qwen: { label: 'Qwen Code', short: 'qw', sub: 'Qwen coding agent', bin: 'qwen' },
+  kimi: { label: 'Kimi', short: 'ki', sub: 'Moonshot agent', bin: 'kimi' },
+  droid: { label: 'Droid', short: 'dr', sub: 'Factory agent', bin: 'droid' },
+  cursor: { label: 'Cursor Agent', short: 'cu', sub: 'Cursor CLI', bin: 'cursor-agent' },
+};
+function kindMeta(k) { return KINDS[k] || { label: k || 'shell', short: k ? k.slice(0, 2) : '$', sub: '' }; }
+const STATUS = {
+  blocked: { label: 'Needs you', rank: 0 },
+  working: { label: 'Running', rank: 1 },
+  done: { label: 'Done', rank: 2 },
+  idle: { label: 'Idle', rank: 3 },
+  unknown: { label: 'Starting', rank: 4 },
+};
+
+// ------------------------------------------------------------------ the link
+
+const hosts = new Map();   // name -> host state
+let reqSeq = 0;
+
+function hostState(name) {
+  let h = hosts.get(name);
+  if (!h) {
+    h = { name, state: 'idle', info: {}, err: '', rtt: 0, pending: new Map(), snap: null, lastSnap: 0, retry: 0, polling: false, repos: null, bins: null, since: 0 };
+    hosts.set(name, h);
+  }
+  return h;
+}
+
+function loadHosts() {
+  let list = [];
+  try { list = JSON.parse(N.hosts()) || []; } catch (e) {}
+  const names = new Set(list.map((x) => x.name));
+  for (const n of [...hosts.keys()]) if (!names.has(n)) hosts.delete(n);
+  for (const x of list) {
+    const h = hostState(x.name);
+    h.address = x.address || ''; h.user = x.user || '';
+    if (h.state === 'idle') connect(h);
+  }
+}
+
+function connect(h) {
+  h.state = 'connecting'; h.err = '';
+  try { N.connect(h.name); } catch (e) { h.state = 'offline'; }
+  render();
+}
+
+function call(hostName, ...args) {
+  const h = hosts.get(hostName);
+  if (!h || h.state !== 'online') return Promise.reject(new Error(hostName + ' is offline'));
+  const id = String(++reqSeq);
+  const line = id + '\t' + args.map((a) => 'x' + b64e(String(a))).join('\t');
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => { h.pending.delete(id); reject(new Error('timed out')); }, 25000);
+    h.pending.set(id, { resolve, reject, t, t0: performance.now() });
+    N.send(hostName, line);
+  });
+}
+async function herdr(host, ...args) {
+  const r = await call(host, 'herdr', ...args);
+  let j = null;
+  try { j = JSON.parse(r.out); } catch (e) {}
+  if (j && j.error) { const e = new Error(j.error.message || j.error.code); e.code = j.error.code; throw e; }
+  if (r.rc !== 0 && !j) { const e = new Error(r.out.trim().split('\n').pop() || 'herdr failed'); throw e; }
+  return j ? j.result : r.out;
+}
+
+window.ash = {
+  onReply(host, id, rc, b) {
+    const h = hosts.get(host); if (!h) return;
+    const p = h.pending.get(id); if (!p) return;
+    h.pending.delete(id); clearTimeout(p.t);
+    p.resolve({ rc, out: b64d(b), ms: performance.now() - p.t0 });
+  },
+  onLink(host, state, detail) {
+    const h = hostState(host);
+    const was = h.state;
+    if (state === 'online') {
+      h.state = 'online'; h.retry = 0; h.err = ''; h.since = now();
+      h.info = {};
+      for (const l of b64d(detail).split('\n')) { const i = l.indexOf('='); if (i > 0) h.info[l.slice(0, i)] = l.slice(i + 1); }
+      if (h.everOnline && was !== 'online') logEvent({ type: 'net', host, text: 'Reconnected to ' + host, sub: 'herdr ' + (h.info.herdr || '?') });
+      h.everOnline = true;
+      startPolling(h);
+    } else if (state === 'connecting') {
+      h.state = 'connecting';
+    } else {
+      for (const p of h.pending.values()) { clearTimeout(p.t); p.reject(new Error(host + ' disconnected')); }
+      h.pending.clear();
+      h.state = state === 'error' ? 'error' : 'offline';
+      h.err = detail || '';
+      if (was === 'online') logEvent({ type: 'net', host, text: 'Lost connection to ' + host, sub: 'reconnecting…' });
+      scheduleReconnect(h);
+    }
+    render();
+  },
+  onDictation(id, text) { const f = dictations.get(id); if (f) { dictations.delete(id); f(text || ''); } },
+  setVisible(v) { ui.visible = !!v; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (v) { render(); for (const h of hosts.values()) if (h.state === 'online') kick(h); } },
+  setInsets(top, bottom) {
+    document.documentElement.style.setProperty('--safe-top', top + 'px');
+    document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
+  },
+  hostsChanged() { loadHosts(); render(); },
+  back() { return goBack(); },
+  openAgent(host, pane) { ui.sheet = null; ui.stack = [{ v: 'board' }]; ui.tab = 'board'; openDetail(host + '|' + pane); },
+};
+
+function scheduleReconnect(h) {
+  if (h.reconnectTimer) return;
+  // "unpaired"/"nossh"/"noherdr" won't fix themselves by retrying fast.
+  const hard = /unpaired|nossh|noherdr|badname/.test(h.err);
+  const delay = hard ? 60000 : Math.min(30000, 2000 * Math.pow(2, h.retry++));
+  h.reconnectTimer = setTimeout(() => { h.reconnectTimer = null; if (hosts.has(h.name)) connect(h); }, delay);
+}
+function reconnectNow(h) {
+  clearTimeout(h.reconnectTimer); h.reconnectTimer = null; h.retry = 0;
+  try { N.reconnect(h.name); } catch (e) {}
+  connect(h);
+}
+
+// ----------------------------------------------------------------- the model
+
+const agents = new Map();  // "host|pane" -> agent
+const ui = { stack: [{ v: 'board' }], tab: 'board', sheet: null, visible: true, filter: 'all' };
+
+function startPolling(h) {
+  if (h.polling) return;
+  h.polling = true;
+  (async () => {
+    while (h.state === 'online') {
+      const t0 = performance.now();
+      try {
+        const r = await call(h.name, 'herdr', 'api', 'snapshot');
+        h.rtt = Math.round(r.ms);
+        const j = JSON.parse(r.out);
+        if (j.error) throw new Error(j.error.message);
+        applySnapshot(h, j.result.snapshot);
+      } catch (e) {
+        if (h.state !== 'online') break;
+      }
+      const fast = ui.visible && !document.hidden;
+      const wait = (fast ? 1200 : 4000) - (performance.now() - t0);
+      await new Promise((res) => { h.wake = res; setTimeout(res, Math.max(150, wait)); });
+    }
+    h.polling = false;
+  })();
+}
+function kick(h) { if (h.wake) h.wake(); }
+
+function applySnapshot(h, s) {
+  h.snap = s; h.lastSnap = now();
+  const seen = new Set();
+  const ws = new Map((s.workspaces || []).map((w) => [w.workspace_id, w]));
+  for (const a of s.agents || []) {
+    const key = h.name + '|' + a.pane_id;
+    seen.add(key);
+    let g = agents.get(key);
+    const status = a.agent_status || 'unknown';
+    if (!g) {
+      g = { key, host: h.name, pane: a.pane_id, firstSeen: now(), tail: null, tailAt: 0, status: null, changed: now(), log: null };
+      agents.set(key, g);
+      if (h.lastSnap - h.since > 3000) logEvent({ type: 'start', host: h.name, key, text: 'New agent: ' + kindMeta(a.agent).label, sub: tidyPath(h, a.foreground_cwd || a.cwd) });
+    }
+    const prev = g.status;
+    Object.assign(g, {
+      kind: a.agent, title: a.terminal_title_stripped || '', cwd: a.foreground_cwd || a.cwd || '',
+      rev: a.revision, seq: a.state_change_seq, session: a.agent_session || null,
+      workspace: (ws.get(a.workspace_id) || {}).label || '', tab: a.tab_id, focused: a.focused, gone: false,
+    });
+    if (prev !== status) {
+      g.status = status; g.changed = now();
+      if (prev) onTransition(g, prev, status);
+    }
+  }
+  for (const [key, g] of agents) {
+    if (g.host === h.name && !seen.has(key) && !g.gone) {
+      g.gone = true;
+      logEvent({ type: 'gone', host: g.host, text: displayName(g) + ' closed', sub: tidyPath(h, g.cwd) });
+      setTimeout(() => { if (agents.get(key)?.gone) { agents.delete(key); render(); } }, 4000);
+    }
+  }
+  h.otherPanes = (s.panes || []).filter((p) => !p.agent && !seen.has(h.name + '|' + p.pane_id));
+  refreshTails(h);
+  render();
+}
+
+function onTransition(g, prev, status) {
+  const name = displayName(g);
+  if (status === 'blocked') {
+    const ev = logEvent({ type: 'blocked', host: g.host, key: g.key, text: name + ' needs you', sub: where(g) });
+    if (document.hidden || !ui.visible || !(cur().v === 'detail' && cur().key === g.key)) {
+      try { N.notify(g.key, name + ' needs you', where(g)); } catch (e) {}
+    }
+    void ev;
+  } else {
+    try { N.clearNotification(g.key); } catch (e) {}
+    if ((status === 'done' || status === 'idle') && prev === 'working') {
+      logEvent({ type: 'done', host: g.host, key: g.key, text: name + ' finished', sub: where(g) });
+    }
+    if (status === 'working' && prev === 'blocked') {
+      logEvent({ type: 'working', host: g.host, key: g.key, text: name + ' is back to work', sub: where(g) });
+    }
+  }
+  if (status === 'idle' && pendingPrompt(g.key)) {
+    const text = pendingPrompt(g.key); pendingPrompt(g.key, null);
+    herdr(g.host, 'agent', 'prompt', g.pane, text).catch((e) => toast('Couldn\'t send the first prompt: ' + e.message));
+  }
+}
+
+// A shell's own title (user@host:path) shows until the agent sets one.
+function displayName(g) { return g.title && !/^[\w.-]+@[\w.-]+:/.test(g.title) ? g.title : kindMeta(g.kind).label; }
+function tidyPath(h, p) {
+  const home = h && h.info && h.info.home;
+  if (!p) return '';
+  if (home && (p === home || p.startsWith(home + '/'))) p = '~' + p.slice(home.length);
+  return p;
+}
+function repoOf(g) {
+  const wt = String(g.cwd || '').match(/\/\.herdr\/worktrees\/([^/]+)\/[^/]+/);
+  if (wt) return wt[1] + ' · worktree';
+  const h = hosts.get(g.host); const p = tidyPath(h, g.cwd); return p === '~' ? '~' : basename(p);
+}
+function where(g) {
+  const parts = [repoOf(g)];
+  if (hosts.size > 1) parts.push(g.host);
+  return parts.join(' · ');
+}
+
+// A first prompt waiting for the agent to clear a startup question (folder
+// trust, login). Kept in storage so an app restart doesn't drop it.
+function pendingPrompt(key, set) {
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem('ash.pending.v1') || '{}'); } catch (e) {}
+  if (set === undefined) return m[key] || '';
+  if (set) m[key] = set; else delete m[key];
+  try { localStorage.setItem('ash.pending.v1', JSON.stringify(m)); } catch (e) {}
+  return set;
+}
+
+// ------------------------------------------------------------- card tails
+
+const LOG_KINDS = { claude: 1, omp: 1 };
+function hasLog(g) { return !!(g.session && LOG_KINDS[g.kind] && g.session.value); }
+
+async function refreshTails(h) {
+  for (const g of agents.values()) {
+    if (g.host !== h.name || g.gone || g.tailBusy) continue;
+    const age = now() - g.tailAt;
+    const live = g.status === 'working' || g.status === 'blocked';
+    const changed = g.tailKey !== g.rev + ':' + g.seq;
+    if (!(g.tail === null || (live && age > 2500) || (changed && age > 1500))) continue;
+    g.tailBusy = true;
+    fetchTail(g).then((t) => { g.tail = t; }).catch(() => {}).finally(() => {
+      g.tailBusy = false; g.tailAt = now(); g.tailKey = g.rev + ':' + g.seq; render();
+    });
+  }
+}
+
+async function fetchTail(g) {
+  if (g.status === 'blocked') {
+    const scr = await screen(g, 'visible', false);
+    const m = parseMenu(scr);
+    if (m && m.question) {
+      if (m.detailKind && m.detail) return [{ k: m.detailKind, v: m.detail }, { k: '?', v: m.question }];
+      const choices = (m.options || []).filter((o) => !/^(type something|chat about this)/i.test(o.text)).map((o) => o.text).join(' · ');
+      return [{ k: '?', v: m.question }, ...(choices ? [{ k: '', v: choices }] : [])];
+    }
+  }
+  if (hasLog(g)) {
+    const entries = await sessionLog(g, 60000);
+    const out = [];
+    for (let i = entries.length - 1; i >= 0 && out.length < 2; i--) {
+      const e = entries[i];
+      if (e.kind === 'tool') out.unshift({ k: e.verb, v: e.summary });
+      else if (e.kind === 'text') out.unshift({ k: '›', v: firstLine(e.text).replace(/[`*]/g, '') });
+      else if (e.kind === 'user' && out.length === 0) out.unshift({ k: 'you', v: firstLine(e.text) });
+      if (e.kind === 'user') break;
+    }
+    if (out.length) return out;
+  }
+  const scr = await screen(g, 'recent', false, 60);
+  return cleanTail(scr).slice(-2).map((v) => ({ k: '', v }));
+}
+function firstLine(s) { return String(s || '').split('\n').map((x) => x.trim()).find((x) => x) || ''; }
+
+async function screen(g, source, ansi, lines) {
+  const args = ['agent', 'read', g.pane, '--source', source];
+  if (lines) args.push('--lines', String(lines));
+  if (ansi) args.push('--format', 'ansi');
+  const r = await call(g.host, 'herdr', ...args);
+  if (r.rc !== 0) { let j; try { j = JSON.parse(r.out); } catch (e) {} throw new Error(j?.error?.message || 'read failed'); }
+  return r.out;
+}
+
+const RULE = /^[\s─━═╌┄┈╍╴╶╸╺┅┉_\-=~·•▪]+$/;
+const BOXY = /^[\s│┃║╭╮╯╰┌┐└┘├┤┬┴┼╔╗╚╝▏▕]*$/;
+const FOOTER = /(\? for shortcuts|esc to interrupt|shift\+tab|auto mode on|accept edits|bypass permissions|Update available|ctrl\+[a-z] to|\(disable recaps|tokens? left|context left|Run: omp update|New version .* is available)/i;
+function cleanTail(text) {
+  const out = [];
+  for (let l of String(text).split('\n')) {
+    l = l.replace(/\s+$/, '').replace(/^[│┃║]\s?/, '').replace(/\s?[│┃║]$/, '');
+    const t = l.trim();
+    if (!t || RULE.test(t) || BOXY.test(t) || FOOTER.test(t)) continue;
+    if (/^[>❯›]\s*$/.test(t)) continue;           // empty input prompt
+    out.push(t.length > 160 ? t.slice(0, 160) : t);
+  }
+  return out;
+}
+
+// ------------------------------------------------- agent session log parsing
+
+async function sessionLog(g, bytes) {
+  const r = await call(g.host, 'log', g.session.kind, g.session.value, String(bytes || 400000));
+  if (r.rc !== 0) throw new Error('no session log');
+  return parseLog(g, r.out);
+}
+
+function parseLog(g, text) {
+  const lines = text.split('\n');
+  const out = [];
+  const h = hosts.get(g.host);
+  const rel = (p) => {
+    if (!p) return '';
+    p = String(p);
+    if (g.cwd && p.startsWith(g.cwd + '/')) return p.slice(g.cwd.length + 1);
+    return tidyPath(h, p);
+  };
+  const results = new Map();
+  for (const l of lines) {
+    if (!l || l[0] !== '{') continue;
+    let o; try { o = JSON.parse(l); } catch (e) { continue; }
+    const t = Date.parse(o.timestamp || '') || 0;
+    if (g.kind === 'claude') {
+      if (o.isMeta || o.isSidechain) continue;
+      const m = o.message; if (!m) continue;
+      if (o.type === 'user') {
+        if (typeof m.content === 'string') { pushUser(out, m.content, t); continue; }
+        for (const b of m.content || []) {
+          if (b.type === 'text') pushUser(out, b.text, t);
+          else if (b.type === 'tool_result') results.set(b.tool_use_id, { text: flat(b.content), err: !!b.is_error });
+        }
+      } else if (o.type === 'assistant') {
+        for (const b of m.content || []) {
+          if (b.type === 'text' && b.text.trim()) out.push({ kind: 'text', text: b.text, t });
+          else if (b.type === 'tool_use') out.push(toolEntry(b.name, b.input || {}, b.id, t, rel));
+        }
+        if (m.usage) out.push({ kind: 'usage', n: (m.usage.output_tokens || 0), t });
+      }
+    } else {
+      if (o.type !== 'message') continue;
+      const m = o.message || {};
+      if (m.role === 'user') {
+        for (const b of (typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content || [])) if (b.type === 'text') pushUser(out, b.text, t);
+      } else if (m.role === 'assistant') {
+        for (const b of m.content || []) {
+          if (b.type === 'text' && b.text.trim()) out.push({ kind: 'text', text: b.text, t });
+          else if (b.type === 'toolCall') out.push(toolEntry(b.name, b.arguments || {}, b.id, t, rel, b.intent));
+        }
+        if (m.usage) out.push({ kind: 'usage', n: (m.usage.output || m.usage.output_tokens || 0), t });
+      } else if (m.role === 'toolResult') {
+        results.set(m.toolCallId, { text: flat(m.content), err: !!m.isError });
+      }
+    }
+  }
+  for (const e of out) if (e.kind === 'tool' && results.has(e.id)) { const r = results.get(e.id); e.result = r.text; e.err = r.err; }
+  return out;
+}
+function flat(c) {
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) return c.map((b) => (typeof b === 'string' ? b : b.text || '')).join('\n');
+  return '';
+}
+function pushUser(out, text, t) {
+  text = String(text || '');
+  const s = text.trim();
+  if (!s || /^<(command-|local-command|system-reminder|user-memory|bash-|task-notification)/.test(s) || s.startsWith('[Request interrupted')) return;
+  out.push({ kind: 'user', text: s, t });
+}
+function toolEntry(name, input, id, t, rel, intent) {
+  const n = String(name || '').toLowerCase();
+  const path = input.file_path || input.path || input.notebook_path || '';
+  let kind = 'read', verb = n, summary = '', delta = '';
+  if (/^(bash|shell|exec|run|terminal)/.test(n)) { kind = 'run'; verb = 'bash'; summary = input.command || input.cmd || ''; }
+  else if (/^(edit|multiedit|str_replace|apply_patch|patch)/.test(n)) {
+    kind = 'edit'; verb = 'edit'; summary = rel(path);
+    const a = lines(input.old_string ?? input.oldText ?? ''), b = lines(input.new_string ?? input.newText ?? '');
+    if (input.edits && Array.isArray(input.edits)) {
+      let p = 0, m = 0; for (const e of input.edits) { m += lines(e.old_string ?? e.oldText ?? ''); p += lines(e.new_string ?? e.newText ?? ''); }
+      delta = '+' + p + ' −' + m;
+    } else if (a || b) delta = '+' + b + ' −' + a;
+  }
+  else if (/^(write|create|notebookedit)/.test(n)) { kind = 'edit'; verb = 'write'; summary = rel(path); const c = input.content ?? input.text; if (c != null) delta = '+' + lines(c); }
+  else if (/^(read|view|cat)/.test(n)) { verb = 'read'; summary = rel(path) || input.url || ''; }
+  else if (/^(grep|search|rg|find|glob|ls|list)/.test(n)) { verb = n.startsWith('glob') ? 'glob' : n.startsWith('ls') || n.startsWith('list') ? 'ls' : 'grep'; summary = [input.pattern || input.query || '', rel(input.path || '')].filter(Boolean).join('  '); }
+  else if (/^(webfetch|fetch|browse)/.test(n)) { verb = 'fetch'; summary = input.url || ''; }
+  else if (/^(websearch|web_search)/.test(n)) { verb = 'search'; summary = input.query || ''; }
+  else if (/^(todowrite|todo|plan|task|agent|subagent|exitplanmode)/.test(n)) { kind = 'plan'; verb = /todo/.test(n) ? 'todo' : /plan/.test(n) ? 'plan' : 'agent'; summary = input.description || input.prompt?.slice(0, 120) || (Array.isArray(input.todos) ? plural(input.todos.length, 'item') : ''); }
+  else if (/^(askuserquestion|ask)/.test(n)) { kind = 'ask'; verb = 'ask'; summary = input.question || (input.questions && input.questions[0]?.question) || ''; }
+  else { summary = intent || Object.values(input).find((v) => typeof v === 'string') || ''; }
+  summary = String(summary).replace(/\s+/g, ' ').trim();
+  if (summary.length > 140) summary = summary.slice(0, 140) + '…';
+  return { kind: 'tool', cls: kind, verb, summary, delta, id, t, path: kind === 'edit' ? path : '' };
+}
+function lines(s) { s = String(s || ''); return s ? s.split('\n').length : 0; }
+
+// ------------------------------------------------- approval menu parsing
+
+// Reads an agent's question and its choices off the visible screen. Works
+// for numbered menus (Claude Code permission prompts), plain cursor menus
+// (folder trust) and [y/n] prompts.
+function parseMenu(text) {
+  const L = String(text).split('\n').map((l) => l.replace(/\s+$/, ''));
+  const cursorRe = /^(\s*)[❯›▸➜→>]\s+(\S.*)$/;
+  let ci = -1;
+  for (let i = L.length - 1; i >= 0 && i >= L.length - 40; i--) if (cursorRe.test(L[i]) && !/^\s*[>❯]\s*$/.test(L[i])) { ci = i; break; }
+  const res = { options: [], selected: 0, question: '', detail: '', context: [], hint: '', yn: false };
+  if (ci >= 0) {
+    const ind = (l) => l.match(/^\s*/)[0].length;
+    const isOpt = (l) => l.trim() && !RULE.test(l.trim()) && (cursorRe.test(l) || /^\s+(\d+[.)]\s+)?\S/.test(l));
+    const baseInd = ind(L[ci]);
+    let a = ci, b = ci;
+    while (a - 1 >= 0 && isOpt(L[a - 1]) && Math.abs(ind(L[a - 1]) - baseInd) <= 2 && !/[?:]$/.test(L[a - 1].trim())) a--;
+    const numbered = (l) => /^\s*(?:[❯›▸➜→>]\s+)?\d+[.)]\s/.test(l);
+    for (;;) {
+      if (b + 1 < L.length && isOpt(L[b + 1]) && ind(L[b + 1]) >= baseInd && !/(Esc|Enter) to /i.test(L[b + 1])) { b++; continue; }
+      // A numbered menu can carry on below a rule (Claude puts "Chat about this" there).
+      if (b + 2 < L.length && RULE.test(L[b + 1].trim()) && numbered(L[b + 2]) && numbered(L[ci])) { b += 2; continue; }
+      break;
+    }
+    // A continuation line (deeper indent, no number) belongs to the option above.
+    for (let i = a; i <= b; i++) {
+      const l = L[i];
+      if (RULE.test(l.trim())) continue;
+      const m = l.match(cursorRe);
+      const body = (m ? m[2] : l.trim());
+      const num = body.match(/^(\d+)[.)]\s+(.*)$/);
+      if (!m && !num && res.options.length && ind(l) > baseInd + 2) { const o = res.options[res.options.length - 1]; o.desc = (o.desc ? o.desc + ' ' : '') + body; continue; }
+      res.options.push({ text: (num ? num[2] : body).trim(), num: num ? num[1] : null });
+      if (m) res.selected = res.options.length - 1;
+    }
+    for (let i = b + 1; i < Math.min(L.length, b + 4); i++) if (/(Esc|Enter|Tab) to /i.test(L[i])) { res.hint = L[i].trim(); break; }
+    // The question: the nearest sentence ending in "?" above the menu
+    // (prompts often wrap it, or put a link line just above the choices),
+    // else the nearest non-empty line.
+    let q = a - 1;
+    while (q >= 0 && (!L[q].trim() || RULE.test(L[q].trim()))) q--;
+    if (q >= 0) res.question = L[q].trim();
+    for (let i = a - 1, para = []; i >= Math.max(0, a - 16); i--) {
+      const t = L[i].trim();
+      if (t && !RULE.test(t)) { para.unshift(t); if (i > 0 && L[i - 1].trim() && !RULE.test(L[i - 1].trim())) continue; }
+      const txt = para.join(' ');
+      const qi = txt.indexOf('?');
+      if (qi >= 0) {
+        // Sentence start: after the last ". " / "! " / ": " before the "?"
+        // (a dot inside "alpha.txt" isn't a sentence end).
+        let st = 0; const re = /[.!?:]\s+/g; let mm;
+        while ((mm = re.exec(txt)) && mm.index < qi) st = mm.index + mm[0].length;
+        res.question = txt.slice(st, qi + 1).trim(); q = i; break;
+      }
+      para = [];
+      if (t && RULE.test(t) && /─|━|═/.test(t)) break;
+    }
+    // Context: back up to the rule that opens the prompt box.
+    let top = q - 1;
+    while (top >= 0 && !(RULE.test(L[top].trim()) && L[top].trim().length > 20 && /─|━|═/.test(L[top]))) top--;
+    res.context = L.slice(top + 1, Math.max(top + 1, q)).filter((l) => !/^\s*Tip:/.test(l));
+    while (res.context.length && !res.context[0].trim()) res.context.shift();
+    while (res.context.length && !res.context[res.context.length - 1].trim()) res.context.pop();
+    // The most concrete line: the last one inside the box (a command, a path).
+    const real = res.context.map((l) => l.trim()).filter((l) => l && !RULE.test(l));
+    res.detail = real[real.length - 1] || '';
+    const head = (real[0] || '').toLowerCase();
+    res.detailKind = /^(bash|shell|run)\b|command$/.test(head) ? 'bash' : /^(edit|write|create|update|apply)\b/.test(head) ? 'edit' : /^(fetch|web)/.test(head) ? 'fetch' : '';
+    res.tipLines = new Set(L.map((l, i) => (/^\s*Tip:/.test(l) ? i : -1)).filter((i) => i >= 0));
+    res.ctxStart = top + 1; res.ctxEnd = Math.max(top + 1, q);
+    if (res.options.length >= 2) return res;
+  }
+  // [y/n] style
+  const tail = cleanTail(L.slice(-12).join('\n'));
+  const yn = tail.slice().reverse().find((l) => /\[(y\/n|Y\/n|y\/N)\]|\(y\/n\)/.test(l));
+  if (yn) return { options: [{ text: 'Yes', key: 'y' }, { text: 'No', key: 'n' }], selected: 0, question: yn, detail: '', context: tail.slice(-6, -1), hint: '', yn: true };
+  if (tail.length) return { options: [], selected: 0, question: tail[tail.length - 1], detail: tail.length > 1 ? tail[tail.length - 2] : '', context: tail.slice(-8), hint: '', yn: false };
+  return null;
+}
+
+function keysFor(menu, i) {
+  const o = menu.options[i];
+  if (o.key) return [o.key, 'enter'];
+  const d = i - menu.selected;
+  const keys = [];
+  for (let k = 0; k < Math.abs(d); k++) keys.push(d > 0 ? 'down' : 'up');
+  keys.push('enter');
+  return keys;
+}
+function isNo(t) { return /^(no\b|reject|deny|cancel|exit\b)/i.test(t); }
+
+// ------------------------------------------------------------------ ANSI
+
+const PAL = ['#1A1B1E', '#F07A6A', '#7FD1B9', '#E6B450', '#8AB4F8', '#B9A3F2', '#7FC8D9', '#C9CAC6',
+  '#6C6E72', '#F3A397', '#A8E3D1', '#F0C674', '#AFCBFA', '#D0C2F7', '#A6DDE8', '#ECECEA'];
+function c256(n) {
+  if (n < 16) return PAL[n];
+  if (n >= 232) { const v = 8 + (n - 232) * 10; return `rgb(${v},${v},${v})`; }
+  n -= 16; const s = [0, 95, 135, 175, 215, 255];
+  return `rgb(${s[Math.floor(n / 36)]},${s[Math.floor(n / 6) % 6]},${s[n % 6]})`;
+}
+function ansiHtml(text) {
+  let out = '', st = {}, open = false;
+  const flush = () => { if (open) { out += '</span>'; open = false; } };
+  const style = () => {
+    const css = [];
+    let fg = st.fg, bg = st.bg;
+    if (st.inv) { const x = fg; fg = bg || '#ECECEA'; bg = x || '#121314'; }
+    if (fg) css.push('color:' + fg); if (bg) css.push('background:' + bg);
+    const cls = [st.b && 'a-b', st.d && 'a-d', st.i && 'a-i', st.u && 'a-u'].filter(Boolean).join(' ');
+    if (css.length || cls) { out += `<span${cls ? ` class="${cls}"` : ''}${css.length ? ` style="${css.join(';')}"` : ''}>`; open = true; }
+  };
+  const re = /\x1b\[([0-9;:]*)m|\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Za-z0-9]|[\x00-\x08\x0b-\x1f]/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    out += esc(text.slice(last, m.index)); last = re.lastIndex;
+    if (m[1] === undefined) continue;
+    const p = m[1] === '' ? [0] : m[1].split(/[;:]/).map(Number);
+    for (let i = 0; i < p.length; i++) {
+      const v = p[i];
+      if (v === 0) st = {}; else if (v === 1) st.b = 1; else if (v === 2) st.d = 1; else if (v === 3) st.i = 1; else if (v === 4) st.u = 1;
+      else if (v === 7) st.inv = 1; else if (v === 22) { st.b = 0; st.d = 0; } else if (v === 23) st.i = 0; else if (v === 24) st.u = 0; else if (v === 27) st.inv = 0;
+      else if (v >= 30 && v <= 37) st.fg = PAL[v - 30]; else if (v >= 90 && v <= 97) st.fg = PAL[v - 82]; else if (v === 39) st.fg = null;
+      else if (v >= 40 && v <= 47) st.bg = PAL[v - 40]; else if (v >= 100 && v <= 107) st.bg = PAL[v - 92]; else if (v === 49) st.bg = null;
+      else if ((v === 38 || v === 48) && p[i + 1] === 5) { st[v === 38 ? 'fg' : 'bg'] = c256(p[i + 2]); i += 2; }
+      else if ((v === 38 || v === 48) && p[i + 1] === 2) { st[v === 38 ? 'fg' : 'bg'] = `rgb(${p[i + 2]},${p[i + 3]},${p[i + 4]})`; i += 4; }
+    }
+    flush(); style();
+  }
+  out += esc(text.slice(last)); flush();
+  return out;
+}
+
+// ------------------------------------------------------------------ markdown
+
+function md(src) {
+  const blocks = String(src).replace(/\r/g, '').split(/\n```/);
+  let html = '';
+  blocks.forEach((blk, i) => {
+    if (i % 2 === 1) { const nl = blk.indexOf('\n'); html += '<pre>' + esc(blk.slice(nl + 1).replace(/```\s*$/, '')) + '</pre>'; return; }
+    for (const para of blk.split(/\n{2,}/)) {
+      const ls = para.split('\n').filter((l) => l.trim());
+      if (!ls.length) continue;
+      if (ls.every((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l))) {
+        const ol = /^\s*\d/.test(ls[0]);
+        html += (ol ? '<ol>' : '<ul>') + ls.map((l) => '<li>' + inline(l.replace(/^\s*([-*•]|\d+[.)])\s+/, '')) + '</li>').join('') + (ol ? '</ol>' : '</ul>');
+      } else {
+        html += '<p>' + ls.map((l) => inline(l.replace(/^#+\s+/, ''))).join('<br>') + '</p>';
+      }
+    }
+  });
+  return html;
+}
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+}
+
+// ---------------------------------------------------------------- activity
+
+const ACT_KEY = 'ash.activity.v1';
+let activity = [];
+try { activity = JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); } catch (e) { activity = []; }
+let unseenNeeds = 0;
+function logEvent(ev) {
+  ev.t = now();
+  activity.unshift(ev);
+  if (activity.length > 300) activity.length = 300;
+  try { localStorage.setItem(ACT_KEY, JSON.stringify(activity)); } catch (e) {}
+  if (ev.type === 'blocked' && ui.tab !== 'activity') unseenNeeds++;
+  return ev;
+}
+
+// ------------------------------------------------- agent favorites
+
+function store(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const favs = () => store('ash.favs.v1', []);
+function toggleFav(kind) { const f = favs(); const i = f.indexOf(kind); if (i >= 0) f.splice(i, 1); else f.push(kind); save('ash.favs.v1', f); }
+
+// ---------------------------------------------------------------- dictation
+
+const dictations = new Map();
+function dictate(cb) {
+  const id = String(++reqSeq);
+  dictations.set(id, cb);
+  try { N.dictate(id); } catch (e) { dictations.delete(id); toast('Voice input isn\'t available'); }
+}
+
+// ------------------------------------------------------------------ routing
+
+const cur = () => ui.stack[ui.stack.length - 1];
+function push(v) { ui.stack.push(v); ui.anim = 'enter'; render(); }
+function goBack() {
+  if (ui.sheet) { closeSheet(); return true; }
+  if (ui.stack.length > 1) { ui.stack.pop(); ui.anim = null; render(); return true; }
+  if (ui.tab !== 'board') { setTab('board'); return true; }
+  return false;
+}
+function setTab(t) {
+  if (t === 'shell') { try { N.showShell(); } catch (e) {} return; }
+  ui.tab = t; ui.stack = [{ v: t }]; ui.anim = null;
+  if (t === 'activity') unseenNeeds = 0;
+  render();
+}
+function openDetail(key) {
+  const g = agents.get(key); if (!g) return;
+  const tab = hasLog(g) ? (g.status === 'blocked' ? 'trace' : 'chat') : 'screen';
+  push({ v: 'detail', key, tab });
+  loadDetail(g, true);
+}
+
+// ------------------------------------------------------------------ render
+
+let renderQueued = false;
+function render() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; renderNow(); });
+}
+
+function renderNow() {
+  const app = $('#app');
+  const v = cur();
+  const html = v.v === 'board' ? viewBoard() : v.v === 'detail' ? viewDetail(v) : v.v === 'new' ? viewNew(v)
+    : v.v === 'activity' ? viewActivity() : v.v === 'computers' ? viewComputers() : '';
+  const id = v.v + (v.key || '');
+  let el = app.firstElementChild;
+  const nav = v.v === 'board' || v.v === 'activity';
+  if (!el || el.dataset.id !== id) {
+    app.innerHTML = `<section class="view${nav ? ' with-nav' : ''}${ui.anim ? ' ' + ui.anim : ''}" data-id="${esc(id)}"></section>`;
+    el = app.firstElementChild; ui.anim = null;
+    morph(el, html, true);
+  } else {
+    morph(el, html, false);
+  }
+  renderNav(nav);
+  renderSheet();
+}
+
+// Minimal keyed DOM patching: regions marked data-k are replaced only when
+// their HTML changed, so scroll positions, focus and typed text survive the
+// once-a-second refresh.
+function morph(el, html, fresh) {
+  if (fresh) { el.innerHTML = html; return; }
+  const tpl = document.createElement('template'); tpl.innerHTML = html;
+  const next = tpl.content;
+  for (const n of next.querySelectorAll('[data-k]')) {
+    const old = el.querySelector(`[data-k="${CSS.escape(n.dataset.k)}"]`);
+    if (!old) { el.innerHTML = html; return; }
+    if (n.dataset.keep !== undefined) continue;
+    if (old.innerHTML !== n.innerHTML) old.innerHTML = n.innerHTML;
+    for (const a of n.getAttributeNames()) if (a !== 'data-k' && old.getAttribute(a) !== n.getAttribute(a)) old.setAttribute(a, n.getAttribute(a));
+  }
+}
+
+function renderNav(show) {
+  const nav = $('#tabs');
+  if (!show) { nav.style.display = 'none'; return; }
+  nav.style.display = '';
+  const needs = [...agents.values()].filter((g) => g.status === 'blocked' && !g.gone).length;
+  const b = (t, icon, label, dot) => `<button data-act="tab" data-t="${t}" ${ui.tab === t ? 'aria-current="page"' : ''}>${icon}${label}${dot ? `<span class="dot">${dot}</span>` : ''}</button>`;
+  const html = b('board', I.grid, 'Agents', needs || '') + b('shell', I.shell, 'Shell', '') + b('activity', I.list, 'Activity', unseenNeeds || '');
+  if (nav.innerHTML !== html) nav.innerHTML = html;
+}
+
+// ---- board
+
+function sortedAgents() {
+  return [...agents.values()].sort((a, b) => (STATUS[a.status]?.rank ?? 9) - (STATUS[b.status]?.rank ?? 9) || (b.changed - a.changed));
+}
+
+function viewBoard() {
+  const list = sortedAgents();
+  const hs = [...hosts.values()];
+  const needs = list.filter((g) => g.status === 'blocked' && !g.gone).length;
+  let sub;
+  if (!hs.length) sub = '<span class="live off"></span>no computers paired';
+  else if (hs.length === 1) {
+    const h = hs[0];
+    const panes = h.snap ? (h.snap.panes || []).length : 0;
+    sub = `<span class="live ${h.state === 'online' ? '' : h.state === 'connecting' ? 'warn' : 'off'}"></span>` + esc([h.name, h.state === 'online' ? 'tailscale' : h.state === 'connecting' ? 'connecting…' : 'offline',
+      h.state === 'online' ? plural(panes, 'pane') : '', needs ? needs + (needs === 1 ? ' needs you' : ' need you') : ''].filter(Boolean).join(' · ')) + ' ›';
+  } else {
+    const on = hs.filter((h) => h.state === 'online').length;
+    sub = `<span class="live ${on === hs.length ? '' : on ? 'warn' : 'off'}"></span>` + esc([on + '/' + hs.length + ' computers online', plural(list.length, 'agent'), needs ? needs + (needs === 1 ? ' needs you' : ' need you') : ''].filter(Boolean).join(' · ')) + ' ›';
+  }
+  let body;
+  if (!hs.length) body = emptyPair();
+  else if (!list.length) {
+    const connecting = hs.some((h) => h.state === 'connecting' || (h.state === 'online' && !h.snap));
+    const offline = hs.every((h) => h.state === 'offline' || h.state === 'error');
+    if (connecting) body = '<div class="cards">' + '<div class="skel"></div>'.repeat(3) + '</div>';
+    else if (offline) body = `<div class="empty"><h3>Can't reach ${hs.length === 1 ? esc(hs[0].name) : 'your computers'}</h3><p>${esc(offlineReason(hs[0]))}</p><div class="row"><button class="btn" data-act="go" data-v="computers">${I.laptop} Computers</button><button class="btn primary" data-act="reconnect-all">${I.refresh} Retry</button></div></div>`;
+    else body = `<div class="empty"><h3>No agents running</h3><p>Start one here, or run an agent in herdr on your computer and it shows up on this board.</p><div class="row"><button class="btn primary" data-act="new">${I.plus} New agent</button></div></div>`;
+  } else {
+    body = '<div class="cards">' + list.map(card).join('') + otherPanes() + '</div>';
+  }
+  return `<header class="top"><div class="top-row"><div class="h1">Agents</div>
+      <button class="fab" data-act="new" aria-label="New agent">${I.plus}</button></div>
+      <button class="sub" data-act="go" data-v="computers" data-k="sub">${sub}</button></header>
+    <main class="scroll" data-k="board">${body}</main>`;
+}
+
+function card(g) {
+  const k = kindMeta(g.kind);
+  const st = g.gone ? 'idle' : g.status || 'unknown';
+  const tail = g.tail === null ? '<div class="tail empty">…</div>'
+    : g.tail.length ? `<div class="tail">${g.tail.map((l) => `<div class="ln">${l.k ? `<span class="k">${esc(l.k.padEnd(5))}</span> ` : ''}${esc(l.v)}</div>`).join('')}</div>`
+      : '<div class="tail empty">no output yet</div>';
+  const pill = g.gone ? 'Closed' : STATUS[st]?.label || st;
+  return `<button class="card ${st}${g.gone ? ' gone' : ''}" data-act="agent" data-key="${esc(g.key)}">
+    <div class="card-head"><span class="badge">${esc(k.short)}</span>
+      <div class="who"><b>${esc(displayName(g))}</b><span>${esc(where(g))}</span></div>
+      <span class="pill ${st}">${esc(pill)}</span></div>
+    ${tail}
+    ${st === 'idle' || st === 'unknown' ? '' : `<div class="prog ${st}"><i></i></div>`}
+  </button>`;
+}
+
+function otherPanes() {
+  const rows = [];
+  for (const h of hosts.values()) for (const p of h.otherPanes || []) rows.push({ h, p });
+  if (!rows.length) return '';
+  return `<div class="section-label">Other panes</div><div class="mini">${rows.slice(0, 12).map(({ h, p }) => `
+    <button data-act="pane" data-host="${esc(h.name)}" data-pane="${esc(p.pane_id)}"><span class="badge">$</span>
+      <div class="who"><b>${esc(paneTitle(h, p))}</b><span>${esc(tidyPath(h, p.foreground_cwd || p.cwd))}${hosts.size > 1 ? ' · ' + esc(h.name) : ''}</span></div></button>`).join('')}</div>`;
+}
+
+function shortUptime(u) {
+  if (!u) return '—';
+  const n = (re) => +((u.match(re) || [])[1] || 0);
+  const d = n(/(\d+) weeks?/) * 7 + n(/(\d+) days?/), hh = n(/(\d+) hours?/), mm = n(/(\d+) minutes?/);
+  return d ? `${d}d ${hh}h` : hh ? `${hh}h ${mm}m` : `${mm}m`;
+}
+
+function paneTitle(h, p) {
+  const t = p.terminal_title_stripped || '';
+  return t && !/^[\w.-]+@[\w.-]+:/.test(t) ? t : basename(tidyPath(h, p.foreground_cwd || p.cwd)) || 'shell';
+}
+
+function offlineReason(h) {
+  if (!h) return '';
+  if (/unpaired/.test(h.err)) return 'This phone isn\'t paired with it any more. Run a-sh-pair on the computer and scan again.';
+  if (/noherdr/.test(h.err)) return 'herdr isn\'t installed there. Run setup-home on the computer.';
+  if (/nossh/.test(h.err)) return 'The SSH client is missing from Linux on this phone.';
+  return 'Check that Tailscale is on, here and on the computer. Retrying in the background.';
+}
+
+function emptyPair() {
+  return `<div class="empty"><h3>Pair your computer</h3><p>Run this on the computer, then scan the QR code it shows.</p>
+    <div class="cmd" style="width:100%"><code>${esc(SETUP)}</code><button class="icon-btn" data-act="copy" aria-label="Copy">${I.copy}</button></div>
+    <div class="row"><button class="btn primary" data-act="scan">${I.qr} Scan QR</button><button class="btn" data-act="paste">Paste link</button></div></div>`;
+}
+const SETUP = 'bash <(curl -fsSL https://raw.githubusercontent.com/txapotxapa/ghostty-android-terminal/main/tools/setup-home)';
+
+// ---- detail
+
+function viewDetail(v) {
+  const g = agents.get(v.key);
+  if (!g) return `<div class="bar"><button class="icon-btn" data-act="back">${I.back}</button><div class="plain">Agent closed</div></div>`;
+  const k = kindMeta(g.kind);
+  const tabs = hasLog(g) ? [['chat', 'Chat'], ['trace', 'Trace'], ['screen', 'Terminal']] : [['screen', 'Terminal']];
+  const st = g.gone ? 'idle' : g.status;
+  let body = '';
+  if (v.tab === 'chat') body = chatHtml(g);
+  else if (v.tab === 'trace') body = traceHtml(g);
+  else body = screenHtml(g);
+  const banner = st === 'blocked'
+    ? `<button class="banner" data-act="review" data-key="${esc(g.key)}"><i></i><span>Waiting on you${g.menu?.question ? ': ' + esc(g.menu.question) : ''}</span><b>Review</b></button>` : '';
+  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button>
+      <span class="badge lg">${esc(k.short)}</span>
+      <div class="title" data-k="dt"><b>${esc(displayName(g))}</b><span>${esc(where(g))} · ${esc(STATUS[st]?.label || st)}</span></div>
+      <button class="icon-btn" data-act="agent-menu" data-key="${esc(g.key)}" aria-label="More">${I.more}</button></div>
+    ${tabs.length > 1 ? `<div class="seg" role="tablist" data-k="seg">${tabs.map(([t, l]) => `<button role="tab" data-act="dtab" data-t="${t}" aria-selected="${v.tab === t}">${l}</button>`).join('')}</div>` : ''}
+    <div class="scroll" id="dscroll" data-k="dbody-${v.tab}">${body}</div>
+    <div class="dock"><div data-k="banner">${banner}</div>
+      <div class="composer" data-k="composer" data-keep><textarea id="steer" rows="1" placeholder="Steer ${esc(k.short === g.kind ? g.kind : k.label)}…" enterkeyhint="send"></textarea>
+        <button class="round" data-act="mic" data-target="steer" aria-label="Dictate">${I.mic}</button>
+        <button class="round go" data-act="steer" data-key="${esc(g.key)}" aria-label="Send" hidden>${I.send}</button></div></div>`;
+}
+
+function turnOf(entries) {
+  let i = entries.length - 1;
+  while (i >= 0 && entries[i].kind !== 'user') i--;
+  return i < 0 ? entries : entries.slice(i);
+}
+
+function noLogNote(g) {
+  return `<div class="note"><b>No transcript yet.</b> ${esc(kindMeta(g.kind).label)} writes its session log after its first reply, so chat and trace fill in then. The <b>Terminal</b> tab shows it live.</div>`;
+}
+function traceHtml(g) {
+  if (!g.log && g.noLog) return noLogNote(g);
+  if (!g.log) return '<div class="trace"><div class="tail empty">Loading trace…</div></div>';
+  const turn = turnOf(g.log);
+  const tools = turn.filter((e) => e.kind === 'tool');
+  const t0 = turn[0]?.t || 0;
+  const tEnd = g.status === 'working' ? now() : (turn[turn.length - 1]?.t || t0);
+  const files = new Set(tools.filter((e) => e.path).map((e) => e.path));
+  const tokens = turn.filter((e) => e.kind === 'usage').reduce((s, e) => s + e.n, 0);
+  const stats = `<div class="stats"><div><small>time</small><b>${t0 ? mmss(tEnd - t0) : '—'}</b></div><div><small>steps</small><b>${tools.length}</b></div>
+    <div><small>files</small><b>${files.size}</b></div><div><small>tokens</small><b>${tokens ? compact(tokens) : '—'}</b></div></div>`;
+  const evs = turn.filter((e) => e.kind !== 'usage').slice(-80).map((e) => {
+    const tm = t0 && e.t ? mmss(e.t - t0) : '';
+    if (e.kind === 'user') return `<div class="ev plan"><span class="d"></span><div class="t"><em>you</em>${esc(firstLine(e.text).slice(0, 200))}</div><span class="tm">${tm}</span></div>`;
+    if (e.kind === 'text') return `<div class="ev say"><span class="d"></span><div class="t"><em>says</em>${esc(firstLine(e.text).replace(/[`*]/g, '').slice(0, 220))}</div><span class="tm">${tm}</span></div>`;
+    const out = e.result && (e.cls === 'run' || e.err || e.verb === 'grep') ? resultSnippet(e.result) : '';
+    return `<div class="ev ${e.cls}${e.err ? ' err' : ''}"><span class="d"></span><div class="t"><em>${esc(e.verb)}</em>${esc(e.summary)}${e.delta ? ' <span style="color:var(--muted)">' + esc(e.delta) + '</span>' : ''}</div><span class="tm">${tm}</span>${out ? `<div class="out">${esc(out)}</div>` : ''}</div>`;
+  });
+  if (g.status === 'blocked' && g.menu?.question) evs.push(`<div class="ev ask"><span class="d"></span><div class="t"><em>ask</em>${esc(g.menu.question)}</div><span class="tm">${t0 ? mmss(now() - t0) : ''}</span></div>`);
+  return stats + `<div class="trace">${evs.join('') || '<div class="tail empty">No steps in this turn yet.</div>'}</div>`;
+}
+function resultSnippet(s) {
+  const ls = String(s).split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim());
+  const pick = ls.length > 4 ? [...ls.slice(0, 2), '…', ...ls.slice(-1)] : ls;
+  return pick.map((l) => (l.length > 120 ? l.slice(0, 120) + '…' : l)).join('\n');
+}
+
+function chatHtml(g) {
+  if (!g.log && g.noLog) return noLogNote(g);
+  if (!g.log) return '<div class="chat"><div class="tail empty">Loading conversation…</div></div>';
+  const items = [];
+  let steps = [];
+  let lastT = 0;
+  const flushSteps = () => {
+    if (!steps.length) return;
+    const last = steps[steps.length - 1];
+    items.push(`<button class="steps" data-act="dtab" data-t="trace">▸ ${plural(steps.length, 'step')} · ${esc(last.verb)} ${esc(last.summary.slice(0, 40))}</button>`);
+    steps = [];
+  };
+  const recent = g.log.filter((e) => e.kind !== 'usage').slice(-160);
+  for (const e of recent) {
+    if (e.t && e.t - lastT > 30 * 60 * 1000) { flushSteps(); items.push(`<div class="when">${esc(new Date(e.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</div>`); }
+    if (e.t) lastT = e.t;
+    if (e.kind === 'tool') { steps.push(e); continue; }
+    flushSteps();
+    if (e.kind === 'user') items.push(`<div class="msg me">${esc(e.text)}</div>`);
+    else if (e.kind === 'text') items.push(`<div class="msg ai">${md(e.text)}</div>`);
+  }
+  flushSteps();
+  if (g.status === 'working') items.push('<div class="steps" style="border-style:dashed">● working…</div>');
+  return `<div class="chat">${items.slice(-60).join('') || '<div class="tail empty">No messages yet.</div>'}</div>`;
+}
+
+function screenHtml(g) {
+  const keys = [['esc', 'Esc'], ['up', '↑'], ['down', '↓'], ['enter', 'Enter'], ['ctrl+c', 'Ctrl-C']];
+  return `<div class="screen" id="scr">${g.screen ? ansiHtml(g.screen) : '<span style="color:var(--faint)">Loading…</span>'}</div>
+    <div class="screen-actions">${keys.map(([k, l]) => `<button class="btn sm" data-act="key" data-k2="${k}" data-key="${esc(g.key)}">${l}</button>`).join('')}
+      <button class="btn sm primary" style="margin-left:auto" data-act="takeover" data-key="${esc(g.key)}">${I.term}</button></div>`;
+}
+
+let detailTimer = null;
+async function loadDetail(g, first) {
+  clearTimeout(detailTimer);
+  const v = cur();
+  if (v.v !== 'detail' || v.key !== g.key) return;
+  const sc = $('#dscroll');
+  const atBottom = !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 60;
+  try {
+    if (g.status === 'blocked') g.menu = parseMenu(await screen(g, 'visible', false)); else g.menu = null;
+    if (v.tab === 'screen') g.screen = tidyScreen((await screen(g, 'visible', true)).replace(/\n+$/, ''));
+    else if (hasLog(g)) {
+      try { g.log = await sessionLog(g, 400000); g.noLog = false; }
+      catch (e) { g.noLog = true; if (first && v.tab !== 'screen') { v.tab = 'screen'; return loadDetail(g, true); } }
+    }
+  } catch (e) {
+    if (first) toast(e.message);
+  }
+  renderNow();
+  const pin = () => { const sc2 = $('#dscroll'); if (sc2) sc2.scrollTop = sc2.scrollHeight; };
+  if (first || atBottom) { pin(); requestAnimationFrame(pin); if (first) setTimeout(pin, 250); }
+  const busy = g.status === 'working' || g.status === 'blocked' || v.tab === 'screen';
+  detailTimer = setTimeout(() => { const a = agents.get(g.key); if (a) loadDetail(a, false); }, busy ? 1800 : 5000);
+}
+
+// ---- approval sheet
+
+function reviewSheet(g) {
+  ui.sheet = { type: 'review', key: g.key, loading: true };
+  render();
+  Promise.all([screen(g, 'visible', false), screen(g, 'visible', true)]).then(([plain, ansi]) => {
+    if (!ui.sheet || ui.sheet.key !== g.key) return;
+    const menu = parseMenu(plain);
+    const al = ansi.split('\n');
+    const ctx = menu && menu.ctxStart !== undefined
+      ? al.slice(menu.ctxStart, menu.ctxEnd).filter((l, i) => !menu.tipLines?.has(menu.ctxStart + i)).join('\n')
+      : (menu?.context || []).join('\n');
+    ui.sheet = { type: 'review', key: g.key, menu, ctx: tidyScreen(ctx).replace(/^(\s*\n)+|(\n\s*)+$/g, '') };
+    render();
+  }).catch((e) => { toast(e.message); closeSheet(); });
+}
+
+function sheetReview(s) {
+  const g = agents.get(s.key);
+  if (!g) return '';
+  if (s.loading) return `<div class="grip"></div><h2>Reading ${esc(displayName(g))}…</h2><div class="meta">${esc(where(g))}</div><div class="body"><div class="skel" style="height:200px"></div></div>`;
+  const m = s.menu;
+  if (g.status !== 'blocked' && !s.sent) return `<div class="grip"></div><h2>Already answered</h2><div class="meta">${esc(where(g))} · ${esc(STATUS[g.status]?.label || '')}</div><div class="foot"><button class="btn" data-act="close-sheet">Close</button></div>`;
+  const opts = m?.options || [];
+  // An approval has a yes/no pair; anything else is a question, listed whole.
+  const approval = opts.some((o) => /^yes\b/i.test(o.text)) && opts.some((o) => isNo(o.text));
+  const yes = approval ? opts.findIndex((o) => !isNo(o.text)) : -1;
+  const no = approval ? opts.findIndex((o) => isNo(o.text)) : -1;
+  const others = opts.map((o, i) => [o, i]).filter(([, i]) => i !== yes && i !== no);
+  return `<div class="grip"></div>
+    <h2>${esc(m?.question || 'Waiting on you')}</h2>
+    <div class="meta">${esc(where(g))}</div>
+    <div class="body">
+      ${s.ctx && s.ctx.trim() ? `<div class="ctx">${ansiHtml(s.ctx)}</div>` : ''}
+      ${others.length ? `<div class="opts">${others.map(([o, i]) => `<button class="opt" data-act="choose" data-i="${i}"><span class="n">${esc(o.num || '•')}</span><span>${esc(o.text)}${o.desc ? `<small>${esc(o.desc)}</small>` : ''}</span></button>`).join('')}</div>` : ''}
+    </div>
+    <div class="foot">
+      <div class="composer"><textarea id="amend" rows="1" placeholder="${m?.options?.some((o) => /^(type something|other)/i.test(o.text)) ? 'Or type your own answer…' : 'Or say what to do instead…'}"></textarea>
+        <button class="round" data-act="mic" data-target="amend" aria-label="Dictate">${I.mic}</button>
+        <button class="round go" data-act="amend" aria-label="Send" hidden>${I.send}</button></div>
+      <div class="row">
+        ${no >= 0 ? `<button class="btn danger" data-act="choose" data-i="${no}">${esc(shortLabel(opts[no].text, 'Reject'))}</button>` : `<button class="btn" data-act="esc">Cancel</button>`}
+        ${yes >= 0 ? `<button class="btn primary" data-act="choose" data-i="${yes}">${esc(shortLabel(opts[yes].text, 'Approve'))}</button>` : `<button class="btn" data-act="takeover" data-key="${esc(g.key)}">${I.term} Terminal</button>`}
+      </div>
+    </div>`;
+}
+function shortLabel(t, fallback) {
+  if (/^yes\b/i.test(t) && t.length > 18) return 'Approve';
+  if (/^no\b/i.test(t) && t.length > 18) return 'Reject';
+  return t.length > 24 ? fallback : t;
+}
+
+async function choose(i) {
+  const s = ui.sheet; const g = agents.get(s.key); if (!g || !s.menu) return;
+  haptic();
+  // Re-read right before answering: if the menu moved on, don't press keys
+  // into whatever replaced it.
+  const fresh = parseMenu(await screen(g, 'visible', false));
+  if (!fresh || fresh.question !== s.menu.question || fresh.options.length !== s.menu.options.length) { toast('The question changed — showing the new one'); reviewSheet(g); return; }
+  try {
+    await herdr(g.host, 'agent', 'send-keys', g.pane, ...keysFor(fresh, i));
+    s.sent = true;
+    closeSheet();
+    toast(isNo(fresh.options[i].text) ? 'Rejected' : 'Sent: ' + fresh.options[i].text.slice(0, 40));
+    setTimeout(() => kick(hosts.get(g.host)), 300);
+  } catch (e) { toast(e.message); }
+}
+
+async function amend(text) {
+  const s = ui.sheet; const g = agents.get(s.key); if (!g) return;
+  const m = s.menu;
+  try {
+    // A question with its own free-text choice: pick it, type the answer.
+    const free = m ? m.options.findIndex((o) => /^(type something|other|something else)/i.test(o.text)) : -1;
+    if (free >= 0) {
+      await herdr(g.host, 'agent', 'send-keys', g.pane, ...keysFor(m, free));
+      await sleep(400);
+      await herdr(g.host, 'pane', 'send-text', g.pane, text);
+      await herdr(g.host, 'agent', 'send-keys', g.pane, 'enter');
+      s.sent = true; closeSheet(); toast('Sent');
+      return;
+    }
+    const no = m ? m.options.findIndex((o) => isNo(o.text)) : -1;
+    if (m && m.options.length && no >= 0) await herdr(g.host, 'agent', 'send-keys', g.pane, ...keysFor(m, no));
+    else if (m && m.options.length) await herdr(g.host, 'agent', 'send-keys', g.pane, 'esc');
+    // Wait for the agent to leave the menu, then hand it the new instructions.
+    for (let i = 0; i < 20; i++) {
+      await sleep(300);
+      const a = (await herdr(g.host, 'agent', 'get', g.pane)).agent || {};
+      if (a.agent_status !== 'blocked') break;
+    }
+    await herdr(g.host, 'agent', 'prompt', g.pane, text);
+    s.sent = true; closeSheet(); toast('Sent');
+  } catch (e) {
+    try { await herdr(g.host, 'pane', 'send-text', g.pane, text); await herdr(g.host, 'agent', 'send-keys', g.pane, 'enter'); s.sent = true; closeSheet(); toast('Sent'); }
+    catch (e2) { toast(e.message); }
+  }
+}
+
+// ---- other sheets
+
+function agentMenu(g) {
+  ui.sheet = { type: 'menu', key: g.key };
+  render();
+}
+function sheetMenu(s) {
+  const g = agents.get(s.key); if (!g) return '';
+  return `<div class="grip"></div><h2>${esc(displayName(g))}</h2><div class="meta">${esc(where(g))} · ${esc(g.pane)}</div>
+    <div class="menu">
+      <button data-act="takeover" data-key="${esc(g.key)}">${I.term}<span>Open in terminal<small>Full control in a Ghostty tab</small></span></button>
+      ${g.status === 'blocked' ? `<button data-act="review" data-key="${esc(g.key)}">${I.check}<span>Review what it's asking</span></button>` : ''}
+      <button data-act="interrupt" data-key="${esc(g.key)}">${I.close}<span>Interrupt<small>Sends Esc, like pressing it at the desk</small></span></button>
+      <button class="danger" data-act="close-agent" data-key="${esc(g.key)}">${I.trash}<span>Close agent<small>Closes its pane on ${esc(g.host)}</small></span></button>
+    </div>`;
+}
+function sheetConfirm(s) {
+  const g = agents.get(s.key); if (!g) return '';
+  return `<div class="grip"></div><h2>Close ${esc(displayName(g))}?</h2>
+    <div class="meta">${esc(where(g))}</div><div class="body"><p style="margin:0;color:var(--muted)">This closes the pane on ${esc(g.host)} and ends whatever is running in it. The session log stays on the computer.</p></div>
+    <div class="foot"><div class="row"><button class="btn" data-act="close-sheet">Keep it</button><button class="btn danger" data-act="close-confirm" data-key="${esc(g.key)}">Close agent</button></div></div>`;
+}
+function sheetPane(s) {
+  const h = hosts.get(s.host);
+  return `<div class="grip"></div><h2>${esc(s.title)}</h2><div class="meta">${esc(s.host)} · ${esc(s.pane)}</div>
+    <div class="body"><div class="ctx">${s.screen ? ansiHtml(s.screen) : 'Loading…'}</div></div>
+    <div class="foot"><div class="row"><button class="btn" data-act="pane-close" ${h ? '' : 'disabled'}>Close pane</button><button class="btn primary" data-act="pane-open">${I.term} Open terminal</button></div></div>`;
+}
+
+function sheetKinds() {
+  const v = cur(); const h = hosts.get(v.host);
+  const inst = [...installedKinds(h), 'shell'];
+  const f = favs();
+  const row = (k) => `<div class="krow"><button class="kpick" data-act="kind-pick" data-kind="${k}"><span class="badge">${esc(k === 'shell' ? '$' : kindMeta(k).short)}</span>
+      <span class="who"><b>${esc(kindLabel(k))}</b><span>${esc(kindSub(k))}</span></span>${v.kind === k ? `<span class="ck">${I.check}</span>` : ''}</button>
+    <button class="star${f.includes(k) ? ' on' : ''}" data-act="kind-fav" data-kind="${k}" aria-label="${f.includes(k) ? 'Remove from' : 'Add to'} favorites">${f.includes(k) ? '★' : '☆'}</button></div>`;
+  const fav = inst.filter((k) => f.includes(k)), rest = inst.filter((k) => !f.includes(k));
+  return `<div class="grip"></div><h2>Choose an agent</h2><div class="meta">Installed on ${esc(v.host)} · ★ keeps one at the top</div>
+    <div class="body">${fav.length ? `<div class="section-label">Favorites</div>${fav.map(row).join('')}` : ''}
+      <div class="section-label">${fav.length ? 'Everything else' : 'Installed'}</div>${rest.map(row).join('')}
+      <p class="note" style="margin:12px 2px 4px">Missing one? Install its CLI on ${esc(v.host)} and it shows up here.</p></div>`;
+}
+
+function closeSheet() { ui.sheet = null; render(); }
+function renderSheet() {
+  let host = $('#sheet-host');
+  if (!ui.sheet) { if (host) host.remove(); return; }
+  if (!host) { host = document.createElement('div'); host.id = 'sheet-host'; document.body.appendChild(host); host.innerHTML = '<div class="scrim" data-act="close-sheet"></div><div class="sheet" role="dialog"></div>'; }
+  const s = ui.sheet;
+  const html = s.type === 'kinds' ? sheetKinds() : s.type === 'review' ? sheetReview(s) : s.type === 'menu' ? sheetMenu(s) : s.type === 'confirm' ? sheetConfirm(s) : s.type === 'pane' ? sheetPane(s) : '';
+  const sh = $('.sheet', host);
+  if (sh.dataset.html === html) return;
+  const ta = $('#amend', sh); const typed = ta ? ta.value : '';
+  sh.dataset.html = html; sh.innerHTML = html;
+  const ta2 = $('#amend', sh); if (ta2 && typed) { ta2.value = typed; syncSend(ta2); }
+}
+
+// ---- new agent
+
+function newAgent() {
+  const v = { v: 'new', host: [...hosts.values()].find((h) => h.state === 'online')?.name || '', kind: '', folder: '', worktree: false, prompt: '', busy: '' };
+  push(v); ui.anim = 'enter-up';
+  loadNewOptions(v);
+}
+async function loadNewOptions(v) {
+  const h = hosts.get(v.host); if (!h || h.state !== 'online') return;
+  try {
+    if (!h.bins) h.bins = (await call(h.name, 'which', ...Object.values(KINDS).map((k) => k.bin))).out.split('\n').filter(Boolean);
+    if (!h.repos) h.repos = (await call(h.name, 'repos')).out.split('\n').filter(Boolean).map((l) => { const [p, b] = l.split('\t'); return { path: p, branch: b }; });
+  } catch (e) { toast(e.message); }
+  if (!v.kind) {
+    const inst = installedKinds(h);
+    const last = store('ash.lastKind.v1', '');
+    v.kind = [last, ...favs()].find((k) => k === 'shell' || inst.includes(k)) || inst[0] || 'shell';
+  }
+  if (!v.folder) v.folder = h.repos?.[0]?.path || h.info.home || '';
+  render();
+}
+function installedKinds(h) { return Object.entries(KINDS).filter(([, k]) => !h?.bins || h.bins.includes(k.bin)).map(([id]) => id); }
+function kindLabel(id) { return id === 'shell' ? 'Plain shell' : KINDS[id]?.label || id; }
+function kindSub(id) { return id === 'shell' ? 'A herdr pane, no agent' : KINDS[id]?.sub || ''; }
+
+function viewNew(v) {
+  const hs = [...hosts.values()];
+  const h = hosts.get(v.host);
+  const bins = h?.bins;
+  const quick = [...new Set([...favs(), v.kind])].filter((k) => k === 'shell' || (bins && bins.includes(KINDS[k]?.bin)));
+  const folders = [];
+  const seen = new Set();
+  for (const r of h?.repos || []) if (!seen.has(r.path)) { seen.add(r.path); folders.push(r); }
+  for (const g of agents.values()) if (g.host === v.host && g.cwd && !seen.has(g.cwd)) { seen.add(g.cwd); folders.push({ path: g.cwd, branch: '' }); }
+  if (h?.info.home && !seen.has(h.info.home)) folders.push({ path: h.info.home, branch: '' });
+  const isGit = !!(h?.repos || []).find((r) => r.path === v.folder);
+  const label = v.kind === 'shell' ? 'Open shell in herdr' : 'Start ' + (KINDS[v.kind]?.label || v.kind) + ' in herdr';
+  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Close">${I.close}</button><div class="plain">New agent</div></div>
+    <div class="scroll"><div class="form" data-k="newform">
+      ${hs.length > 1 ? `<div class="label">Computer</div><div class="chips" style="padding:0">${hs.map((x) => `<button class="chip" data-act="new-host" data-h="${esc(x.name)}" aria-pressed="${x.name === v.host}" ${x.state === 'online' ? '' : 'disabled'}>${esc(x.name)}</button>`).join('')}</div>` : ''}
+      ${!h || h.state !== 'online' ? `<div class="empty" style="margin:0"><h3>No computer online</h3><p>${esc(offlineReason(h || hs[0]))}</p></div>` : `
+      <div class="label">Agent</div>
+      ${!bins ? '<div class="skel" style="height:62px"></div>' : `<button class="select" data-act="pick-kind" aria-haspopup="dialog">
+        <span class="badge">${esc(v.kind === 'shell' ? '$' : kindMeta(v.kind).short)}</span>
+        <span class="who"><b>${esc(kindLabel(v.kind))}</b><span>${esc(kindSub(v.kind))}</span></span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+      ${quick.length > 1 ? `<div class="chips" style="padding:2px 0 0">${quick.map((k) => `<button class="chip" data-act="new-kind" data-kind="${k}" aria-pressed="${v.kind === k}">${favs().includes(k) ? '★ ' : ''}${esc(kindLabel(k))}</button>`).join('')}</div>` : ''}`}
+      <div class="label">Folder</div>
+      <div class="list">${!h.repos ? '<button disabled><span class="path">Finding repos…</span></button>' : folders.slice(0, 10).map((f) => `<button data-act="new-folder" data-path="${esc(f.path)}"><span class="path">${esc(tidyPath(h, f.path))}</span><span class="br">${esc(f.branch === 'detached' ? '' : f.branch)}</span><span class="ck">${f.path === v.folder ? I.check : ''}</span></button>`).join('')}</div>
+      <button class="check" role="checkbox" aria-checked="${v.worktree && isGit}" data-act="new-wt" ${isGit ? '' : 'disabled'}><span class="box">${v.worktree && isGit ? I.check : ''}</span>Run in its own git worktree</button>
+      ${v.kind !== 'shell' ? `<div class="label">First prompt</div>
+      <div class="prompt-box" data-keep data-k="np"><textarea id="newprompt" placeholder="What should it work on? Tap the mic to dictate."></textarea></div>` : ''}`}
+    </div></div>
+    <div class="sticky-foot" data-k="newfoot">
+      ${v.kind !== 'shell' ? `<button class="round" data-act="mic" data-target="newprompt" aria-label="Dictate">${I.mic}</button>` : ''}
+      <button class="btn primary" data-act="new-start" ${!h || h.state !== 'online' || v.busy ? 'disabled' : ''}>${esc(v.busy || label)}</button></div>`;
+}
+
+async function startAgent(v) {
+  const h = hosts.get(v.host); if (!h) return;
+  const prompt = ($('#newprompt')?.value || '').trim();
+  save('ash.lastKind.v1', v.kind);
+  const repo = basename(v.folder);
+  const slug = (prompt || v.kind).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'agent';
+  try {
+    v.busy = v.worktree ? 'Creating worktree…' : 'Creating workspace…'; render();
+    let res;
+    if (v.worktree) {
+      const branch = 'a-sh/' + slug + '-' + Math.random().toString(16).slice(2, 6);
+      res = await herdr(h.name, 'worktree', 'create', '--cwd', v.folder, '--branch', branch, '--label', repo + ' · ' + slug, '--no-focus');
+    } else {
+      res = await herdr(h.name, 'workspace', 'create', '--cwd', v.folder, '--label', repo, '--no-focus');
+    }
+    const pane = findPane(res);
+    if (!pane) throw new Error('herdr didn\'t return a pane');
+    const key = h.name + '|' + pane;
+    if (v.kind === 'shell') { v.busy = ''; ui.stack.pop(); render(); toast('Shell opened in herdr'); try { N.openTerminal(h.name, pane); } catch (e) {} return; }
+    v.busy = 'Starting ' + (KINDS[v.kind]?.label || v.kind) + '…'; render();
+    let blocked = false;
+    try { await herdr(h.name, 'agent', 'start', slug, '--kind', v.kind, '--pane', pane, '--timeout', '45000'); }
+    catch (e) { if (e.code === 'agent_not_ready' || /blocked/.test(e.message)) blocked = true; else throw e; }
+    kick(h);
+    await sleep(500);
+    for (let i = 0; i < 10 && !agents.get(key); i++) await sleep(300);
+    const g = agents.get(key) || { key, host: h.name, pane };
+    if (prompt) {
+      if (blocked) pendingPrompt(key, prompt);
+      else await herdr(h.name, 'agent', 'prompt', pane, prompt);
+    }
+    v.busy = '';
+    ui.stack = [{ v: 'board' }]; ui.tab = 'board';
+    if (agents.get(key)) openDetail(key); else render();
+    if (blocked) toast('It needs your OK before starting — tap Review');
+  } catch (e) {
+    v.busy = ''; render(); toast('Couldn\'t start: ' + e.message);
+  }
+}
+function findPane(o) {
+  if (!o || typeof o !== 'object') return '';
+  if (o.root_pane?.pane_id) return o.root_pane.pane_id;
+  if (typeof o.pane_id === 'string') return o.pane_id;
+  for (const v of Object.values(o)) { const p = findPane(v); if (p) return p; }
+  return '';
+}
+
+// ---- activity
+
+function viewActivity() {
+  const F = [['all', 'All'], ['needs', 'Needs you'], ['done', 'Finished'], ['net', 'Computers']];
+  const needsN = activity.filter((e) => e.type === 'blocked' && now() - e.t < 86400000).length;
+  const list = activity.filter((e) => ui.filter === 'all' || (ui.filter === 'needs' && e.type === 'blocked') || (ui.filter === 'done' && e.type === 'done') || (ui.filter === 'net' && e.type === 'net'));
+  let html = '', day = '';
+  for (const e of list.slice(0, 150)) {
+    const d = new Date(e.t); const today = new Date();
+    const yd = new Date(today); yd.setDate(today.getDate() - 1);
+    const label = d.toDateString() === today.toDateString() ? 'Today' : d.toDateString() === yd.toDateString() ? 'Yesterday' : d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    if (label !== day) { html += `<div class="day">${label}</div>`; day = label; }
+    const ic = { blocked: ['blocked', '?'], done: ['done', '✓'], working: ['working', '▸'], start: ['', '+'], gone: ['', '×'], net: ['net', '⇄'] }[e.type] || ['', '•'];
+    const live = e.key && agents.get(e.key);
+    html += `<button class="item" ${live ? `data-act="agent" data-key="${esc(e.key)}"` : 'disabled'}><span class="ic ${ic[0]}">${ic[1]}</span>
+      <span class="tx"><b>${esc(e.text)}</b><span>${esc(e.sub || '')}</span></span><time>${clock(e.t)}</time></button>`;
+  }
+  if (!html) html = `<div class="empty" style="margin:16px 0"><h3>Nothing yet</h3><p>Agents finishing, getting stuck or asking for approval show up here, while this phone is connected.</p></div>`;
+  return `<header class="top"><div class="h1">Activity</div></header>
+    <div class="chips" data-k="chips">${F.map(([f, l]) => `<button class="chip" data-act="filter" data-f="${f}" aria-pressed="${ui.filter === f}">${l}${f === 'needs' && needsN ? ' · ' + needsN : ''}</button>`).join('')}</div>
+    <main class="scroll" data-k="feed"><div class="feed">${html}</div></main>`;
+}
+
+// ---- computers
+
+function viewComputers() {
+  const hs = [...hosts.values()];
+  return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Back">${I.back}</button><div class="plain">Computers</div></div>
+    <div class="scroll" data-k="hosts"><div class="hosts">
+      ${hs.map((h) => {
+        const on = h.state === 'online';
+        const s = h.snap;
+        const nA = [...agents.values()].filter((g) => g.host === h.name && !g.gone).length;
+        const stTxt = on ? `<span class="on">Online · Tailscale${h.rtt ? ' · ' + h.rtt + ' ms' : ''}</span>` : h.state === 'connecting' ? '<span class="warn">Connecting…</span>' : `<span class="bad">Offline</span>`;
+        return `<div class="host"><div class="host-head"><span class="host-ic ${on ? '' : 'off'}">${I.laptop}</span>
+            <div class="who"><b>${esc(h.name)}</b>${stTxt}</div></div>
+          ${on ? `<div class="kv"><div><small>herdr ${esc(h.info.herdr || '')}</small><span>${s ? plural((s.panes || []).length, 'pane') + ' · ' + plural(nA, 'agent') : '…'}</span></div>
+            <div><small>ssh</small><span>${esc(h.name)} / ${esc(h.name)}-sh</span></div>
+            <div><small>address</small><span>${esc(h.address || '—')}</span></div>
+            <div><small>uptime</small><span>${esc(shortUptime(h.info.uptime))}</span></div></div>`
+            : `<p style="margin:0;color:var(--muted);font-size:14px">${esc(offlineReason(h))}</p>`}
+          <div class="row"><button class="btn" data-act="reconnect" data-h="${esc(h.name)}">${I.refresh} Reconnect</button>
+            <button class="btn" data-act="open-shell" data-h="${esc(h.name)}">${I.term} Shell</button></div></div>`;
+      }).join('')}
+      <div class="pair"><h3>${hs.length ? 'Pair another computer' : 'Pair your computer'}</h3>
+        <p>Run this on it, then scan the QR it shows. The code expires in 5 minutes.</p>
+        <div class="cmd"><code>${esc(SETUP)}</code><button class="icon-btn" data-act="copy" aria-label="Copy command">${I.copy}</button></div>
+        <div class="row" style="display:flex;gap:10px"><button class="btn primary" data-act="scan">${I.qr} Scan QR</button><button class="btn" data-act="paste">Paste link</button></div></div>
+    </div></div>`;
+}
+
+// --------------------------------------------------------------- events
+
+function syncSend(ta) {
+  const box = ta.closest('.composer');
+  if (!box) return;
+  const has = ta.value.trim().length > 0;
+  const go = box.querySelector('.round.go'), mic = box.querySelector('[data-act="mic"]');
+  if (go) go.hidden = !has;
+  if (mic) mic.hidden = has;
+  ta.style.height = 'auto'; ta.style.height = Math.min(128, ta.scrollHeight) + 'px';
+}
+
+document.addEventListener('input', (e) => { if (e.target.matches('.composer textarea')) syncSend(e.target); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.matches('.composer textarea')) {
+    e.preventDefault();
+    const go = e.target.closest('.composer').querySelector('.round.go');
+    if (go && !go.hidden) go.click();
+  }
+});
+
+let pressTimer = null, pressed = null, longFired = false;
+document.addEventListener('pointerdown', (e) => {
+  const c = e.target.closest('.card');
+  longFired = false;
+  if (!c) return;
+  pressed = c;
+  pressTimer = setTimeout(() => { longFired = true; haptic(); const g = agents.get(c.dataset.key); if (g) agentMenu(g); }, 480);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => document.addEventListener(t, () => { clearTimeout(pressTimer); pressed = null; }));
+document.addEventListener('scroll', () => clearTimeout(pressTimer), true);
+
+document.addEventListener('click', async (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.disabled) return;
+  if (longFired) { longFired = false; e.preventDefault(); return; }
+  const act = el.dataset.act;
+  const g = el.dataset.key ? agents.get(el.dataset.key) : null;
+  switch (act) {
+    case 'tab': setTab(el.dataset.t); break;
+    case 'back': goBack(); break;
+    case 'go': push({ v: el.dataset.v }); break;
+    case 'new': newAgent(); break;
+    case 'agent': if (g) openDetail(g.key); break;
+    case 'dtab': { const v = cur(); if (v.v === 'detail') { v.tab = el.dataset.t; const a = agents.get(v.key); a && (a.screen = a.screen || null); render(); a && loadDetail(a, true); } break; }
+    case 'review': if (g) reviewSheet(g); break;
+    case 'agent-menu': if (g) agentMenu(g); break;
+    case 'close-sheet': closeSheet(); break;
+    case 'choose': choose(+el.dataset.i); break;
+    case 'esc': { const a = agents.get(ui.sheet.key); closeSheet(); if (a) herdr(a.host, 'agent', 'send-keys', a.pane, 'esc').catch((x) => toast(x.message)); break; }
+    case 'amend': { const t = $('#amend').value.trim(); if (t) amend(t); break; }
+    case 'steer': {
+      const ta = $('#steer'); const t = ta.value.trim(); if (!t || !g) break;
+      if (g.status === 'blocked') { toast('It\'s waiting on a question — answer it first'); reviewSheet(g); break; }
+      ta.value = ''; syncSend(ta);
+      herdr(g.host, 'agent', 'prompt', g.pane, t).then(() => { toast('Sent'); kick(hosts.get(g.host)); setTimeout(() => loadDetail(g, false), 600); })
+        .catch((x) => { ta.value = t; syncSend(ta); toast(x.message); });
+      break;
+    }
+    case 'mic': {
+      const target = el.dataset.target;
+      el.classList.add('rec');
+      dictate((text) => {
+        el.classList.remove('rec');
+        const ta = document.getElementById(target); if (!ta || !text) return;
+        ta.value = (ta.value ? ta.value.replace(/\s*$/, ' ') : '') + text; syncSend(ta); ta.focus();
+      });
+      break;
+    }
+    case 'key': if (g) { haptic(); herdr(g.host, 'agent', 'send-keys', g.pane, el.dataset.k2).then(() => setTimeout(() => loadDetail(g, false), 250)).catch((x) => toast(x.message)); } break;
+    case 'takeover': if (g) { closeSheet(); try { N.openTerminal(g.host, g.pane); } catch (x) {} } break;
+    case 'interrupt': if (g) { closeSheet(); herdr(g.host, 'agent', 'send-keys', g.pane, 'esc').then(() => toast('Interrupted')).catch((x) => toast(x.message)); } break;
+    case 'close-agent': if (g) { ui.sheet = { type: 'confirm', key: g.key }; render(); } break;
+    case 'close-confirm': if (g) {
+      closeSheet();
+      herdr(g.host, 'pane', 'close', g.pane).then(() => { toast('Closed'); if (cur().v === 'detail') goBack(); kick(hosts.get(g.host)); }).catch((x) => toast(x.message));
+    } break;
+    case 'pane': {
+      const host = el.dataset.host, pane = el.dataset.pane;
+      const h = hosts.get(host); const p = (h?.otherPanes || []).find((x) => x.pane_id === pane);
+      ui.sheet = { type: 'pane', host, pane, title: p ? paneTitle(h, p) : 'shell' };
+      render();
+      call(host, 'herdr', 'pane', 'read', pane, '--source', 'visible', '--format', 'ansi').then((r) => { if (ui.sheet?.pane === pane) { ui.sheet.screen = cleanTrailing(r.out); render(); } });
+      break;
+    }
+    case 'pane-open': { const s = ui.sheet; closeSheet(); try { N.openTerminal(s.host, s.pane); } catch (x) {} break; }
+    case 'pane-close': { const s = ui.sheet; closeSheet(); herdr(s.host, 'pane', 'close', s.pane).then(() => { toast('Closed'); kick(hosts.get(s.host)); }).catch((x) => toast(x.message)); break; }
+    case 'filter': ui.filter = el.dataset.f; render(); break;
+    case 'reconnect': { const h = hosts.get(el.dataset.h); if (h) reconnectNow(h); break; }
+    case 'reconnect-all': for (const h of hosts.values()) if (h.state !== 'online') reconnectNow(h); break;
+    case 'open-shell': try { N.openShell(el.dataset.h); } catch (x) {} break;
+    case 'copy': try { N.copy(SETUP); toast('Copied'); } catch (x) {} break;
+    case 'scan': try { N.scanQr(); } catch (x) {} break;
+    case 'paste': try { N.pastePairing(); } catch (x) {} break;
+    case 'new-host': { const v = cur(); v.host = el.dataset.h; v.kind = ''; v.folder = ''; render(); loadNewOptions(v); break; }
+    case 'new-kind': { const v = cur(); v.kind = el.dataset.kind; render(); break; }
+    case 'new-folder': { const v = cur(); v.folder = el.dataset.path; render(); break; }
+    case 'new-wt': { const v = cur(); v.worktree = !v.worktree; render(); break; }
+    case 'pick-kind': ui.sheet = { type: 'kinds' }; render(); break;
+    case 'kind-pick': { const v = cur(); if (v.v === 'new') v.kind = el.dataset.kind; closeSheet(); break; }
+    case 'kind-fav': toggleFav(el.dataset.kind); haptic(); render(); break;
+    case 'new-start': startAgent(cur()); break;
+  }
+});
+function cleanTrailing(s) { return tidyScreen(String(s).replace(/(\n\s*)+$/, '')); }
+// Agent TUIs draw full-width rules for a 200-column desktop; on a phone they'd
+// wrap into several lines, so long runs shrink to fit.
+function tidyScreen(s) {
+  return String(s).split('\n').map((l) => l.replace(/[─━═╌┄┈╍\-]{24,}/g, (r) => r.slice(0, 24)).replace(/[ \t]+((?:\x1b\[[0-9;]*m)*)$/, '$1')).join('\n');
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) for (const h of hosts.values()) if (h.state === 'online') kick(h); render(); });
+setInterval(() => { if (cur().v === 'detail' && cur().tab === 'trace') render(); }, 1000);
+
+// --------------------------------------------------------------- boot
+
+if (!N) {
+  document.body.innerHTML = '<p style="padding:24px;color:#9A9C9F;font-family:sans-serif">The agent board runs inside the A-SH app.</p>';
+} else {
+  loadHosts();
+  render();
+}

@@ -1,0 +1,17 @@
+#!/bin/sh
+# a-sh-board-link NAME — the agent board's connection to herdr on NAME.
+#
+# Started by the app (not a person) on a hidden terminal: switches the tty
+# to raw so request and reply lines pass through untouched, then keeps one
+# SSH session open that runs the bridge script on the computer. The bridge
+# travels in the command itself, so the computer needs nothing installed.
+stty raw -echo 2>/dev/null
+name=$1
+case $name in ''|*[!A-Za-z0-9._-]*) echo "@@E badname"; exit 2 ;; esac
+grep -q "^# a-sh:$name begin" "$HOME/.ssh/config" 2>/dev/null || { echo "@@E unpaired"; exit 2; }
+command -v ssh >/dev/null || { echo "@@E nossh"; exit 2; }
+b64=$(base64 -w0 /usr/local/share/a-sh/board-bridge.sh)
+# "$name-sh" is the paired host without herdr's RemoteCommand / forced tty.
+exec ssh -T -o BatchMode=yes -o ConnectTimeout=10 \
+	-o ServerAliveInterval=15 -o ServerAliveCountMax=2 \
+	"$name-sh" "bash -c 'eval \"\$(printf %s $b64 | base64 -d)\"'"
