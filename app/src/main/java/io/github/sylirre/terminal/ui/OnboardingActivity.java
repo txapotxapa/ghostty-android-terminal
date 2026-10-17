@@ -97,6 +97,7 @@ public final class OnboardingActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppTheme.apply(this);
         settings = new AppSettings(this);
 
         // Nothing to set up: a rootfs is already installed (e.g. a stale

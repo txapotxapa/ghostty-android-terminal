@@ -3,9 +3,9 @@
      terminal surface above. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
-        <color android:color="@color/surface_1" />
+        <color android:color="?attr/surface_1" />
     </item>
     <item android:gravity="top" android:height="1dp">
-        <color android:color="@color/divider" />
+        <color android:color="?attr/divider" />
     </item>
 </layer-list>

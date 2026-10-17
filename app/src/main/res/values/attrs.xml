@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Chrome palette. Every screen draws its colors from these theme attrs
+         (layouts and drawables as ?attr/..., code through Chrome.color), and
+         ui/AppTheme applies the Palette.* style (res/values/palettes.xml) of
+         the selected theme to each Activity, so one pick recolors the app.
+         The defaults in Theme.Terminal are the Classic tokens in colors.xml. -->
+    <attr name="palette_light" format="boolean" />
+    <attr name="surface_base" format="color" />
+    <attr name="surface_1" format="color" />
+    <attr name="surface_2" format="color" />
+    <attr name="surface_3" format="color" />
+    <attr name="surface_4" format="color" />
+    <attr name="divider" format="color" />
+    <attr name="border" format="color" />
+    <attr name="text_primary" format="color" />
+    <attr name="text_secondary" format="color" />
+    <attr name="text_tertiary" format="color" />
+    <attr name="on_accent" format="color" />
+    <attr name="accent" format="color" />
+    <attr name="accent_pressed" format="color" />
+    <attr name="accent_deep" format="color" />
+    <attr name="accent_translucent" format="color" />
+    <attr name="accent_soft" format="color" />
+    <attr name="danger" format="color" />
+    <attr name="danger_pressed" format="color" />
+    <attr name="success" format="color" />
+    <attr name="warning" format="color" />
+    <attr name="nav_badge" format="color" />
+    <attr name="nav_badge_ink" format="color" />
+</resources>

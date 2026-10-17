@@ -25,17 +25,50 @@ info() {
 	printf 'home=%s\n' "$HOME"
 }
 
-# Git checkouts up to three levels under $HOME, newest activity first, with
-# their current branch: the new-agent folder picker.
+# The new-agent folder picker, newest activity first: git checkouts up to
+# three levels under $HOME (with their current branch), and every folder a
+# Claude Code session ran in (git or not, from ~/.claude/projects), so the
+# places you actually work come first.
 repos() {
-	find "${A_SH_REPOS_ROOT:-$HOME}" -maxdepth 4 -name .git \
-		-not -path '*/node_modules/*' -not -path "${A_SH_REPOS_ROOT:-$HOME}/.*" \
-		-not -path '*/.local/*' -not -path '*/.cargo/*' 2>/dev/null |
-		while IFS= read -r g; do
-			d=${g%/.git}
-			b=$(git -C "$d" symbolic-ref --short -q HEAD 2>/dev/null || echo detached)
-			printf '%s\t%s\t%s\n' "$(stat -c %Y "$g" 2>/dev/null || echo 0)" "$d" "$b"
-		done | sort -rn | head -40 | cut -f2-
+	{
+		find "${A_SH_REPOS_ROOT:-$HOME}" -maxdepth 4 -name .git \
+			-not -path '*/node_modules/*' -not -path "${A_SH_REPOS_ROOT:-$HOME}/.*" \
+			-not -path '*/.local/*' -not -path '*/.cargo/*' 2>/dev/null |
+			while IFS= read -r g; do
+				printf '%s\t%s\n' "$(stat -c %Y "$g" 2>/dev/null || echo 0)" "${g%/.git}"
+			done
+		for p in "$HOME"/.claude/projects/*/; do
+			f=$(ls -t "$p"*.jsonl 2>/dev/null | head -1)
+			[ -n "$f" ] || continue
+			d=$(grep -o -m1 '"cwd":"[^"]*"' "$f" 2>/dev/null | head -1 | cut -d'"' -f4)
+			[ -n "$d" ] && [ -d "$d" ] && [ "$d" != "$HOME" ] || continue
+			case $d in /tmp|/tmp/*|"$HOME"/.*) continue ;; esac
+			printf '%s\t%s\n' "$(stat -c %Y "$f" 2>/dev/null || echo 0)" "$d"
+		done
+	} | sort -rn | awk -F'\t' '!seen[$2]++' | head -40 |
+		while IFS=$'\t' read -r _ d; do
+			if [ -e "$d/.git" ]; then
+				b=$(git -C "$d" symbolic-ref --short -q HEAD 2>/dev/null || echo detached)
+			else
+				b=
+			fi
+			printf '%s\t%s\n' "$d" "$b"
+		done
+}
+
+# The subfolders of DIR (default $HOME; "~" expands), for the new-agent folder
+# browser: first "PATH<TAB>git?" for DIR itself, then "NAME<TAB>git?" per
+# visible subfolder, alphabetical.
+dirs() {
+	local d=${1:-$HOME}
+	case $d in '~') d=$HOME ;; '~/'*) d=$HOME/${d#'~/'} ;; esac
+	cd -- "$d" 2>/dev/null || { echo "can't open $d"; return 1; }
+	printf '%s\t%s\n' "$PWD" "$([ -e .git ] && echo git)"
+	for e in */; do
+		[ -d "$e" ] || continue
+		e=${e%/}
+		printf '%s\t%s\n' "$e" "$([ -e "$e/.git" ] && echo git)"
+	done | head -400
 }
 
 # The last BYTES (default 400 KB, at most 2 MB) of an agent's session log. Claude Code: the session id, found
@@ -249,6 +282,10 @@ while IFS= read -r line; do
 	repos)
 		out=$(repos)
 		rc=0
+		;;
+	dirs)
+		out=$(dirs "${args[0]-}")
+		rc=$?
 		;;
 	log)
 		out=$(session_log "${args[0]-}" "${args[1]-}" "${args[2]-}")

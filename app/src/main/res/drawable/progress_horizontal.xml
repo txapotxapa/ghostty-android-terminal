@@ -5,14 +5,14 @@
     <item android:id="@android:id/background">
         <shape android:shape="rectangle">
             <corners android:radius="@dimen/radius_pill" />
-            <solid android:color="@color/surface_3" />
+            <solid android:color="?attr/surface_3" />
         </shape>
     </item>
     <item android:id="@android:id/progress">
         <clip>
             <shape android:shape="rectangle">
                 <corners android:radius="@dimen/radius_pill" />
-                <solid android:color="@color/accent" />
+                <solid android:color="?attr/accent" />
             </shape>
         </clip>
     </item>

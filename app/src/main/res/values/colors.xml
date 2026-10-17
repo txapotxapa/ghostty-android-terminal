@@ -4,9 +4,10 @@
          the in-app surface identity). -->
     <color name="launcher_bg">#0B0B12</color>
 
-    <!-- ================= App chrome design tokens (dark-only) =================
-         Every non-terminal surface draws from these. Layouts and the
-         programmatically built views (via ui/Chrome.java) share one source. -->
+    <!-- ================= App chrome design tokens (Classic palette) ==========
+         The defaults for the theme attrs of the same name (attrs.xml); each
+         app theme overrides them with its Palette.* style (palettes.xml).
+         Reference the attrs (?attr/..., Chrome.color), not these. -->
 
     <!-- Layered surfaces, darkest (app root, behind the terminal) to lightest. -->
     <color name="surface_base">#0B0B10</color>

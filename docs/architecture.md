@@ -305,6 +305,18 @@ SharedPreferences). `ThemeActivity` edits a working copy with a live
 the selected theme to every open session and repaints, on session create and
 in `onResume` (so edits made in the editor land when you return).
 
+The same pick themes the whole app. Every chrome color is a theme attr
+(`res/values/attrs.xml`: surfaces, inks, accent, semantic colors), referenced
+as `?attr/...` in layouts and drawables and resolved by `Chrome.color` in
+code. Each preset has a `Palette.*` style of the same name
+(`res/values/palettes.xml`, generated from a few anchor colors per theme by
+`scripts/gen-app-palettes.py`); `AppTheme.apply` overlays it on each Activity
+before inflation and sets light or dark system-bar icons. A user theme
+borrows the palette of the preset with the nearest background. The board
+page gets the palette as CSS variables through `AshNative.theme()`, before
+its first paint. Picking a different theme recreates the open screens, since
+inflated views keep the colors they were built with.
+
 ### Kitty graphics
 
 libghostty-vt parses and stores images and placements for the [Kitty

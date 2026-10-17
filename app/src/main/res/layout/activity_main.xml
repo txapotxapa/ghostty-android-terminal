@@ -6,7 +6,7 @@
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface_1">
+    android:background="?attr/surface_1">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -53,7 +53,7 @@
                         android:layout_gravity="center_vertical"
                         android:gravity="center"
                         android:text="@string/prompt_prev_icon"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="@dimen/text_icon_glyph"
                         android:background="@drawable/bg_chip"
                         android:contentDescription="@string/prompt_prev_description"
@@ -69,7 +69,7 @@
                         android:layout_gravity="center_vertical"
                         android:gravity="center"
                         android:text="@string/prompt_next_icon"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="@dimen/text_icon_glyph"
                         android:background="@drawable/bg_chip"
                         android:contentDescription="@string/prompt_next_description"
@@ -85,7 +85,7 @@
                         android:layout_gravity="center_vertical"
                         android:gravity="center"
                         android:text="@string/attach_button_icon"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="@dimen/text_icon_glyph"
                         android:background="@drawable/bg_chip"
                         android:contentDescription="@string/attach_button_description"
@@ -100,7 +100,7 @@
                         android:layout_gravity="center_vertical"
                         android:gravity="center"
                         android:text="@string/search_button_icon"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="@dimen/text_icon_glyph"
                         android:background="@drawable/bg_chip"
                         android:contentDescription="@string/search_button_description"

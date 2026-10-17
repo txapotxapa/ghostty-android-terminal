@@ -6,11 +6,8 @@ package io.github.sylirre.terminal.ui;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Color;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -106,7 +103,7 @@ public class ExtraKeysView extends LinearLayout {
     public ExtraKeysView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setOrientation(VERTICAL);
-        palette = ChromePalette.from(context, android.graphics.Color.BLACK);
+        palette = ChromePalette.from(context);
         setBackground(palette.barSurface(false));
         // Half the cap gap: each cap carries key_gap/2 margins on every side,
         // so this makes the outer gutters equal the 4dp inner ones.

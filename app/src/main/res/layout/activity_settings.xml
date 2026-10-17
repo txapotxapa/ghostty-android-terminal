@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/surface_base">
+    android:background="?attr/surface_base">
 
     <io.github.sylirre.terminal.ui.TopBarView
         android:id="@+id/top_bar"

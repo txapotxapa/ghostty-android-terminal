@@ -61,6 +61,7 @@ const I = {
   camera: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   photo: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>',
   file: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>',
+  chev: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>',
   check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg>',
   refresh: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
   link: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
@@ -191,6 +192,7 @@ window.ash = {
     document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
   },
   hostsChanged() { loadHosts(); render(); },
+  setTheme(t) { applyTheme(t); render(); },
   back() { return goBack(); },
   onAttached(target, list) {
     atts[target] = (atts[target] || []).concat(list || []);
@@ -638,8 +640,19 @@ function isNo(t) { return /^(no\b|reject|deny|cancel|exit\b)/i.test(t); }
 
 // ------------------------------------------------------------------ ANSI
 
-const PAL = ['#1A1B1E', '#F07A6A', '#7FD1B9', '#E6B450', '#8AB4F8', '#B9A3F2', '#7FC8D9', '#C9CAC6',
+// The terminal theme's 16 ANSI colors and default fg/bg (AshNative.theme()).
+let PAL = ['#1A1B1E', '#F07A6A', '#7FD1B9', '#E6B450', '#8AB4F8', '#B9A3F2', '#7FC8D9', '#C9CAC6',
   '#6C6E72', '#F3A397', '#A8E3D1', '#F0C674', '#AFCBFA', '#D0C2F7', '#A6DDE8', '#ECECEA'];
+let INK = { fg: '#ECECEA', bg: '#121314' };
+// The app theme: CSS variables for every token in board.css, plus the terminal palette.
+function applyTheme(t) {
+  if (!t || !t.vars) return;
+  const r = document.documentElement.style;
+  for (const k in t.vars) r.setProperty('--' + k, t.vars[k]);
+  r.colorScheme = t.light ? 'light' : 'dark';
+  if (t.ansi && t.ansi.length === 16) PAL = t.ansi;
+  if (t.fg) INK = { fg: t.fg, bg: t.bg };
+}
 function c256(n) {
   if (n < 16) return PAL[n];
   if (n >= 232) { const v = 8 + (n - 232) * 10; return `rgb(${v},${v},${v})`; }
@@ -652,7 +665,7 @@ function ansiHtml(text) {
   const style = () => {
     const css = [];
     let fg = st.fg, bg = st.bg;
-    if (st.inv) { const x = fg; fg = bg || '#ECECEA'; bg = x || '#121314'; }
+    if (st.inv) { const x = fg; fg = bg || INK.fg; bg = x || INK.bg; }
     if (fg) css.push('color:' + fg); if (bg) css.push('background:' + bg);
     const cls = [st.b && 'a-b', st.d && 'a-d', st.i && 'a-i', st.u && 'a-u'].filter(Boolean).join(' ');
     if (css.length || cls) { out += `<span${cls ? ` class="${cls}"` : ''}${css.length ? ` style="${css.join(';')}"` : ''}>`; open = true; }
@@ -1243,6 +1256,32 @@ function sheetAttach() {
       <button data-act="attach-how" data-how="files">${I.file}<span>Files</span></button>
     </div>`;
 }
+// New agent's folder browser: walk the computer's folders, then use one.
+function sheetDirs(s) {
+  const h = hosts.get(s.host);
+  const rows = (s.entries || []).map((e) => `<button data-act="dir-open" data-name="${esc(e.name)}"><span class="path">${esc(e.name)}</span><span class="br">${e.git ? 'git' : ''}</span><span class="ck">${I.chev}</span></button>`).join('');
+  const body = s.err ? `<div class="empty" style="margin:0"><p>${esc(s.err)}</p></div>`
+    : !s.entries ? '<div class="skel" style="height:96px;border-radius:14px"></div>'
+    : `<div class="list">${s.path !== '/' ? '<button data-act="dir-up"><span class="path more">..  up one folder</span></button>' : ''}${rows || '<button disabled><span class="path more">No folders inside</span></button>'}</div>`;
+  return `<div class="grip"></div><h2>Pick a folder</h2>
+    <div class="meta">${esc(s.path ? tidyPath(h, s.path) : 'Loading…')}${s.git ? ' · git' : ''}</div>
+    <div class="body">${body}</div>
+    <div class="foot"><button class="btn primary" data-act="dir-use" ${s.path && !s.err ? '' : 'disabled'}>Use ${esc(s.path ? (tidyPath(h, s.path) === '~' ? '~' : basename(s.path) || '/') : 'this folder')}</button></div>`;
+}
+async function loadDirs(s, path) {
+  s.entries = null; s.err = ''; render();
+  try {
+    const r = await call(s.host, 'dirs', path);
+    if (ui.sheet !== s) return;
+    if (r.rc !== 0) throw new Error(r.out.trim() || "can't open " + path);
+    const [first, ...lines] = r.out.split('\n');
+    const [p, g] = first.split('\t');
+    s.path = p; s.git = g === 'git';
+    s.entries = lines.filter(Boolean).map((l) => { const [name, git] = l.split('\t'); return { name, git: git === 'git' }; });
+  } catch (e) { if (ui.sheet === s) s.err = e.message; }
+  render();
+  const b = $('.sheet .body'); if (b) b.scrollTop = 0;
+}
 // Something shared into the app: pick the agent (or terminal tab) it goes to.
 function sheetShare(s) {
   const list = sortedAgents().filter((g) => !g.gone);
@@ -1400,7 +1439,7 @@ function renderSheet() {
   if (!host) { host = document.createElement('div'); host.id = 'sheet-host'; document.body.appendChild(host); host.innerHTML = '<div class="scrim" data-act="close-sheet"></div><div class="sheet" role="dialog"></div>'; }
   const s = ui.sheet;
   const html = s.type === 'kinds' ? sheetKinds(s) : s.type === 'review' ? sheetReview(s) : s.type === 'menu' ? sheetMenu(s) : s.type === 'confirm' ? sheetConfirm(s) : s.type === 'pane' ? sheetPane(s)
-    : s.type === 'attach' ? sheetAttach() : s.type === 'share' ? sheetShare(s) : '';
+    : s.type === 'attach' ? sheetAttach() : s.type === 'share' ? sheetShare(s) : s.type === 'dirs' ? sheetDirs(s) : '';
   const sh = $('.sheet', host);
   if (sh.dataset.html === html) return;
   // Re-rendering mustn't lose what is being typed in the sheet.
@@ -1426,7 +1465,7 @@ async function loadNewOptions(v) {
   try {
     await loadAgentStates(h);
     if (!h.repos) h.repos = (await call(h.name, 'repos')).out.split('\n').filter(Boolean).map((l) => { const [p, b] = l.split('\t'); return { path: p, branch: b }; });
-  } catch (e) { toast(e.message); }
+  } catch (e) { if (!h.repos) h.repos = []; toast(e.message); }
   if (!v.kind) {
     const inst = installedKinds(h);
     const last = store('ash.lastKind.v1', '');
@@ -1445,10 +1484,12 @@ function viewNew(v) {
   const kst = agentState(h, v.kind);
   const folders = [];
   const seen = new Set();
+  // A folder picked with Browse… stays on the list, first.
+  if (v.folder && !(h?.repos || []).some((r) => r.path === v.folder)) { seen.add(v.folder); folders.push({ path: v.folder, branch: '' }); }
   for (const r of h?.repos || []) if (!seen.has(r.path)) { seen.add(r.path); folders.push(r); }
   for (const g of agents.values()) if (g.host === v.host && g.cwd && !seen.has(g.cwd)) { seen.add(g.cwd); folders.push({ path: g.cwd, branch: '' }); }
   if (h?.info.home && !seen.has(h.info.home)) folders.push({ path: h.info.home, branch: '' });
-  const isGit = !!(h?.repos || []).find((r) => r.path === v.folder);
+  const isGit = v.folderGit || !!(h?.repos || []).find((r) => r.path === v.folder && r.branch);
   const label = v.kind === 'shell' ? 'Open shell in herdr' : 'Start ' + (KINDS[v.kind]?.label || v.kind) + ' in herdr';
   return `<div class="bar"><button class="icon-btn" data-act="back" aria-label="Close">${I.close}</button><div class="plain">New agent</div></div>
     <div class="scroll"><div class="form" data-k="newform">
@@ -1461,7 +1502,7 @@ function viewNew(v) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
       ${quick.length > 1 ? `<div class="chips" style="padding:2px 0 0">${quick.map((k) => `<button class="chip" data-act="new-kind" data-kind="${k}" aria-pressed="${v.kind === k}">${favs().includes(k) ? '★ ' : ''}${esc(kindLabel(k))}</button>`).join('')}</div>` : ''}`}
       <div class="label">Folder</div>
-      <div class="list">${!h.repos ? '<button disabled><span class="path">Finding repos…</span></button>' : folders.slice(0, 10).map((f) => `<button data-act="new-folder" data-path="${esc(f.path)}"><span class="path">${esc(tidyPath(h, f.path))}</span><span class="br">${esc(f.branch === 'detached' ? '' : f.branch)}</span><span class="ck">${f.path === v.folder ? I.check : ''}</span></button>`).join('')}</div>
+      <div class="list">${!h.repos ? '<button disabled><span class="path">Finding repos…</span></button>' : folders.slice(0, 10).map((f) => `<button data-act="new-folder" data-path="${esc(f.path)}"><span class="path">${esc(tidyPath(h, f.path))}</span><span class="br">${esc(f.branch === 'detached' ? '' : f.branch)}</span><span class="ck">${f.path === v.folder ? I.check : ''}</span></button>`).join('') + `<button data-act="browse-dir"><span class="path more">Other folder…</span><span class="ck">${I.chev}</span></button>`}</div>
       <button class="check" role="checkbox" aria-checked="${v.worktree && isGit}" data-act="new-wt" ${isGit ? '' : 'disabled'}><span class="box">${v.worktree && isGit ? I.check : ''}</span>Run in its own git worktree</button>
       ${v.kind !== 'shell' ? `<div class="label">First prompt</div>
       <div class="prompt-box" data-keep data-k="np"><div class="atts" id="atts-newprompt"></div><textarea id="newprompt" placeholder="What should it work on? Tap the mic to dictate."></textarea></div>` : ''}`}
@@ -1788,7 +1829,11 @@ document.addEventListener('click', async (e) => {
     case 'paste': try { N.pastePairing(); } catch (x) {} break;
     case 'new-host': { const v = cur(); v.host = el.dataset.h; v.kind = ''; v.folder = ''; render(); loadNewOptions(v); break; }
     case 'new-kind': { const v = cur(); v.kind = el.dataset.kind; render(); break; }
-    case 'new-folder': { const v = cur(); v.folder = el.dataset.path; render(); break; }
+    case 'new-folder': { const v = cur(); v.folder = el.dataset.path; v.folderGit = false; render(); break; }
+    case 'browse-dir': { const v = cur(); const h = hosts.get(v.host); ui.sheet = { type: 'dirs', host: v.host, path: '', git: false, entries: null, err: '' }; render(); loadDirs(ui.sheet, v.folder || h?.info.home || '~'); break; }
+    case 'dir-open': { const s = ui.sheet; loadDirs(s, s.path.replace(/\/$/, '') + '/' + el.dataset.name); break; }
+    case 'dir-up': { const s = ui.sheet; loadDirs(s, s.path.replace(/\/[^/]*$/, '') || '/'); break; }
+    case 'dir-use': { const s = ui.sheet; const v = cur(); if (v.v === 'new' && s.path) { v.folder = s.path; v.folderGit = s.git; } ui.sheet = null; render(); break; }
     case 'new-wt': { const v = cur(); v.worktree = !v.worktree; render(); break; }
     case 'pick-kind': ui.sheet = { type: 'kinds', mode: 'pick' }; render(); loadAgentStates(hosts.get(cur().host), true).catch(() => {}); break;
     case 'kind-pick': { const v = cur(); if (v.v === 'new') v.kind = el.dataset.kind; closeSheet(); break; }
@@ -1825,6 +1870,7 @@ setInterval(() => { if (cur().v === 'detail' && cur().tab === 'trace') render();
 if (!N) {
   document.body.innerHTML = '<p style="padding:24px;color:#9A9C9F;font-family:sans-serif">The agent board runs inside the A-SH app.</p>';
 } else {
+  try { applyTheme(JSON.parse(N.theme())); } catch (x) {}
   loadHosts();
   render();
 }

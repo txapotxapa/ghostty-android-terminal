@@ -109,6 +109,7 @@ public final class ThemeActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppTheme.apply(this);
         setContentView(R.layout.activity_theme);
 
         TopBarView topBar = findViewById(R.id.top_bar);

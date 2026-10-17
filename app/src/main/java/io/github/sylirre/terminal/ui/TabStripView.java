@@ -8,7 +8,6 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
@@ -103,7 +102,7 @@ public class TabStripView extends LinearLayout {
         super(context, attrs);
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
-        palette = ChromePalette.from(context, Color.BLACK);
+        palette = ChromePalette.from(context);
         progressErrorColor = Chrome.color(context, R.color.danger);
         progressPausedColor = Chrome.color(context, R.color.warning);
 

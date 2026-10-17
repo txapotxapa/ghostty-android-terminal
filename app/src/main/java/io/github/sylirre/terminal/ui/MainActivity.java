@@ -91,13 +91,6 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private static final int REQ_RESTORE = 101;
     private static final int REQ_SETTINGS = 102;
     private static final String STATE_BOARD = "board_visible";
-    // The board's fixed dark tokens (assets/board/board.css), for the nav bar under it.
-    private static final int BOARD_GROUND = 0xFF121314;
-    private static final int BOARD_LINE = 0xFF26282C;
-    private static final int BOARD_RAISED = 0xFF222428;
-    private static final int BOARD_TEXT = 0xFFECECEA;
-    private static final int BOARD_MUTED = 0xFF9A9C9F;
-    private static final int BOARD_RIPPLE = 0x337FD1B9;
     private static final int REQ_ONBOARDING = 103;
     /** Photos / Files picked for an attachment (the composer's + or the terminal's 📎). */
     private static final int REQ_ATTACH = 104;
@@ -117,8 +110,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private View mainTopBar;
     /** Bottom navigation under every main screen (Home / Terminal / Activity / Settings). */
     private NavBarView nav;
-    /** Active chrome palette, derived from the terminal theme (see applyChrome). */
+    /** The app theme's chrome palette (see applyChrome). */
     private ChromePalette chrome;
+    /** The Palette.* style this Activity was built with; a different pick recreates it. */
+    private int appliedPalette;
     private long lastClipToastUptime;
     private ExtraKeysView extraKeys;
     private TerminalSession current;
@@ -170,6 +165,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppTheme.apply(this);
+        appliedPalette = AppTheme.style(this);
         setContentView(R.layout.activity_main);
 
         terminal = findViewById(R.id.terminal);
@@ -180,7 +177,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         extraKeys.attachTerminal(terminal);
         mainTopBar = findViewById(R.id.main_top_bar);
         mainTopBar.setOutlineProvider(ViewOutlineProvider.BOUNDS);
-        chrome = ChromePalette.from(this, 0xFF000000);
+        chrome = ChromePalette.from(this);
 
         settings = new AppSettings(this);
         // Existing installs never see the intro: a rootfs on disk means the
@@ -391,6 +388,12 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     @Override
     protected void onResume() {
         super.onResume();
+        if (AppTheme.style(this) != appliedPalette) {
+            // A new app theme was picked in Settings: rebuild with its palette
+            // (sessions live in SessionManager and carry over).
+            recreate();
+            return;
+        }
         AppUpdater.maybeCheck(this, sessions.isEmpty());
         // Re-apply the whole settings surface: edits made in SettingsActivity /
         // ThemeActivity / ExtraKeysActivity only persist to the stores, so
@@ -466,20 +469,19 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             s.emulator.setGraphemeClustering(grapheme);
         }
         terminal.setDefaultBackground(theme.background);
-        applyChrome(ChromePalette.from(this, theme.background));
+        applyChrome(chrome);
+        if (board != null) board.applyTheme(chrome, theme);
         terminal.invalidate();
     }
 
     /**
-     * Recolors the main-screen chrome from the terminal theme's palette: the
-     * bars, tab strip, keycaps, search bar, the system-bar bands (the root
-     * fill) and the status/nav icon appearance. Dark themes resolve to the
-     * stock token chrome, so the default look is unchanged; light themes get
-     * a light chrome instead of a black frame.
+     * Colors the main-screen chrome from the app theme's palette: the bars,
+     * tab strip, keycaps, search bar, nav bar, the system-bar bands (the root
+     * fill) and the status/nav icon appearance.
      */
     private void applyChrome(ChromePalette p) {
         chrome = p;
-        findViewById(R.id.root).setBackgroundColor(boardVisible() ? BOARD_GROUND : p.surface1);
+        findViewById(R.id.root).setBackgroundColor(boardVisible() ? p.surfaceBase : p.surface1);
         mainTopBar.setBackground(p.barSurface(true));
         styleTopBarButton(promptPrevButton);
         styleTopBarButton(promptNextButton);
@@ -489,45 +491,13 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         tabs.applyPalette(p);
         extraKeys.applyPalette(p);
         searchBar.applyPalette(p);
-        setLightSystemBars(p.isLight && !boardVisible());
+        AppTheme.setLightSystemBars(this, p.isLight);
     }
 
-    /** Dark status/nav-bar icons (for a light surface behind them) or light ones. */
-    private void setLightSystemBars(boolean light) {
-        if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController controller = getWindow().getInsetsController();
-            if (controller != null) {
-                int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                        | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                controller.setSystemBarsAppearance(light ? mask : 0, mask);
-            }
-        } else {
-            View decor = getWindow().getDecorView();
-            int vis = decor.getSystemUiVisibility();
-            int flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                    | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-            decor.setSystemUiVisibility(light ? vis | flags : vis & ~flags);
-        }
-    }
-
-    /**
-     * The nav bar takes the colors of the screen above it: the board's fixed
-     * dark tokens, or the terminal theme's chrome (where it continues the
-     * extra-keys toolbar's surface).
-     */
+    /** The nav bar continues the extra-keys toolbar's surface, on the board too. */
     private void applyNavColors() {
-        if (boardVisible()) {
-            android.graphics.drawable.LayerDrawable bg = new android.graphics.drawable.LayerDrawable(
-                    new android.graphics.drawable.ColorDrawable[]{
-                            new android.graphics.drawable.ColorDrawable(BOARD_GROUND),
-                            new android.graphics.drawable.ColorDrawable(BOARD_LINE)});
-            bg.setLayerHeight(1, Math.max(1, Math.round(getResources().getDisplayMetrics().density)));
-            bg.setLayerGravity(1, android.view.Gravity.TOP);
-            nav.applyColors(bg, BOARD_MUTED, BOARD_TEXT, BOARD_RAISED, BOARD_RIPPLE);
-        } else {
-            nav.applyColors(chrome.barSurface(false), chrome.textSecondary, chrome.textPrimary,
-                    chrome.surface3, chrome.accentTranslucent);
-        }
+        nav.applyColors(chrome.barSurface(false), chrome.textSecondary, chrome.textPrimary,
+                chrome.surface3, chrome.accentTranslucent);
     }
 
     /** A nav bar tap. Home and Activity are the board's two roots; Settings is its own screen. */
@@ -931,7 +901,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     /** Creates the board (hidden) if it isn't yet: its links also carry uploads for terminal tabs. */
     private void ensureBoard() {
         if (board == null) {
-            board = new BoardView(this, new BoardView.Host() {
+            board = new BoardView(this, chrome, themeStore.current(), new BoardView.Host() {
                 @Override
                 public void boardOpenTab(String host, String command) {
                     showBoard(false);
@@ -999,10 +969,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         if (show) {
             InputMethodManager imm = getSystemService(InputMethodManager.class);
             if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
-            findViewById(R.id.root).setBackgroundColor(BOARD_GROUND);
-            applyNavColors();
-            // The board is dark whatever the terminal theme: light system-bar icons.
-            setLightSystemBars(false);
+            findViewById(R.id.root).setBackgroundColor(chrome.surfaceBase);
         } else {
             applyTheme();
             terminal.requestFocus();
@@ -1817,7 +1784,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         box.setPadding(pad, pad, pad, pad);
         TextView status = new TextView(this);
         status.setText(titleRes);
-        status.setTextColor(getColor(R.color.text_primary));
+        status.setTextColor(Chrome.color(this, R.color.text_primary));
         ProgressBar bar = new ProgressBar(this, null,
                 android.R.attr.progressBarStyleHorizontal);
         bar.setIndeterminate(true);

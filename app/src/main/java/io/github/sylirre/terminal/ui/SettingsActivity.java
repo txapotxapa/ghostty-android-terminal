@@ -67,10 +67,14 @@ public final class SettingsActivity extends Activity {
     private ExtraKeysConfig extraKeysConfig;
     private LinearLayout container;
     private boolean pendingEnableStorageBinding;
+    /** The Palette.* style this screen was built with. */
+    private int appliedPalette;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppTheme.apply(this);
+        appliedPalette = AppTheme.style(this);
         setContentView(R.layout.activity_settings);
 
         TopBarView topBar = findViewById(R.id.top_bar);
@@ -90,6 +94,10 @@ public final class SettingsActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (AppTheme.style(this) != appliedPalette) {
+            recreate(); // the theme was changed on the Terminal style screen
+            return;
+        }
         completePendingStorageBindingIfGranted();
     }
 
@@ -99,6 +107,14 @@ public final class SettingsActivity extends Activity {
         List<SettingsSection> sections = new ArrayList<>();
 
         List<Setting> appearance = new ArrayList<>();
+        appearance.add(new Setting.Action(
+                getString(R.string.setting_app_theme_title),
+                getString(R.string.setting_app_theme_summary),
+                () -> themeStore.current().name,
+                () -> ThemePickerDialog.show(this, themeStore, themeStore.selectedName(), t -> {
+                    themeStore.setSelected(t.name);
+                    recreate(); // this screen redraws in the new palette; the rest follows on return
+                })));
         appearance.add(new Setting.Action(
                 getString(R.string.setting_theme_title),
                 getString(R.string.setting_theme_summary),

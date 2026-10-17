@@ -100,13 +100,17 @@ final class BoardView {
     /** Base64 characters per put request: a few PTY buffers, well under any line limit. */
     private static final int CHUNK_CHARS = 48 * 1024;
 
-    BoardView(Activity activity, Host host) {
+    /** The app theme as board.css variables, served to the page by {@code AshNative.theme()}. */
+    private volatile String themeJson;
+
+    BoardView(Activity activity, ChromePalette palette, TerminalTheme theme, Host host) {
         this.activity = activity;
         this.host = host;
+        themeJson = themeJson(activity, palette, theme);
         settings = new AppSettings(activity);
         AppUpdater.addListener(updates);
         web = new WebView(activity);
-        web.setBackgroundColor(Color.parseColor("#121314"));
+        web.setBackgroundColor(palette.surfaceBase);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setVerticalScrollBarEnabled(false);
         WebSettings ws = web.getSettings();
@@ -169,6 +173,95 @@ final class BoardView {
 
     View view() {
         return web;
+    }
+
+    /** Recolors the page (a terminal-color edit; a new app theme recreates the Activity). */
+    void applyTheme(ChromePalette palette, TerminalTheme theme) {
+        String json = themeJson(activity, palette, theme);
+        if (json.equals(themeJson)) return;
+        themeJson = json;
+        js("ash.setTheme(" + json + ")");
+    }
+
+    /**
+     * Every board.css token, derived from the app palette: surfaces and inks
+     * map straight across, and the board's status colors are the palette's
+     * success (mint: working), warning (amber: waiting) and danger (coral:
+     * needs you), each with tints mixed toward the ground for fills and lines.
+     */
+    private static String themeJson(Context c, ChromePalette p, TerminalTheme t) {
+        int ground = p.surfaceBase;
+        int text = p.textPrimary;
+        int toward = p.isLight ? Color.BLACK : text;
+        int mint = Chrome.color(c, R.color.success);
+        int amber = Chrome.color(c, R.color.warning);
+        int coral = Chrome.color(c, R.color.danger);
+        int blue = t.ansi[4];
+        JSONObject v = new JSONObject();
+        try {
+            v.put("ground", css(ground));
+            v.put("surface", css(p.surface1));
+            v.put("raised", css(p.surface2));
+            v.put("raised2", css(p.surface3));
+            v.put("sheet", css(p.surface1));
+            v.put("well", css(ChromePalette.mix(ground, Color.BLACK, p.isLight ? 0.03f : 0.3f)));
+            v.put("line", css(ChromePalette.mix(ground, toward, 0.1f)));
+            v.put("edge", css(ChromePalette.mix(ground, toward, 0.14f)));
+            v.put("edge-strong", css(ChromePalette.mix(ground, toward, 0.2f)));
+            v.put("edge-focus", css(ChromePalette.mix(ground, toward, 0.3f)));
+            v.put("well-line", css(ChromePalette.mix(ground, toward, 0.08f)));
+            v.put("text", css(text));
+            v.put("muted", css(p.textSecondary));
+            v.put("faint", css(p.textTertiary));
+            v.put("tail", css(p.textSecondary));
+            v.put("pill", css(p.textSecondary));
+            v.put("code", css(ChromePalette.mix(text, ground, 0.12f)));
+            v.put("sheen", p.isLight ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.035)");
+            putStatus(v, "mint", mint, ground, text);
+            putStatus(v, "amber", amber, ground, text);
+            putStatus(v, "coral", coral, ground, text);
+            v.put("mint-ink", css(ink(mint, ground, text)));
+            v.put("coral-ink", css(ink(coral, ground, text)));
+            v.put("me", css(ChromePalette.mix(ground, mint, 0.2f)));
+            v.put("blue", css(blue));
+            v.put("blue-bg", css(ChromePalette.mix(ground, blue, 0.16f)));
+            v.put("violet", css(t.ansi[5]));
+            JSONObject o = new JSONObject();
+            o.put("vars", v);
+            o.put("light", p.isLight);
+            org.json.JSONArray ansi = new org.json.JSONArray();
+            for (int a : t.ansi) ansi.put(css(a));
+            o.put("ansi", ansi);
+            o.put("fg", css(t.foreground));
+            o.put("bg", css(t.background));
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            return "{}";
+        }
+    }
+
+    private static void putStatus(JSONObject v, String name, int c, int ground, int text)
+            throws org.json.JSONException {
+        v.put(name, css(c));
+        v.put(name + "-bg", css(ChromePalette.mix(ground, c, 0.14f)));
+        v.put(name + "-fg", css(ChromePalette.mix(c, text, 0.2f)));
+        v.put(name + "-line", css(ChromePalette.mix(ground, c, 0.32f)));
+    }
+
+    /** Ground or text, whichever reads better on {@code c} (fab and record-button ink). */
+    private static int ink(int c, int ground, int text) {
+        float l = Color.luminance(c);
+        float lg = Color.luminance(ground);
+        float lt = Color.luminance(text);
+        return contrast(l, lg) >= contrast(l, lt) ? ground : text;
+    }
+
+    private static float contrast(float a, float b) {
+        return (Math.max(a, b) + 0.05f) / (Math.min(a, b) + 0.05f);
+    }
+
+    private static String css(int argb) {
+        return String.format(java.util.Locale.US, "#%06X", argb & 0xFFFFFF);
     }
 
     boolean isVisible() {
@@ -398,6 +491,11 @@ final class BoardView {
 
     /** Called on the WebView's binder thread; UI work hops to main. */
     private final class Native {
+        @JavascriptInterface
+        public String theme() {
+            return themeJson;
+        }
+
         @JavascriptInterface
         public String hosts() {
             return hostsJson().toString();

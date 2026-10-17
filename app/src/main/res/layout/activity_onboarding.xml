@@ -7,7 +7,7 @@
     android:id="@+id/onb_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface_base">
+    android:background="?attr/surface_base">
 
     <!-- Decorative accent glow behind the content. Height matches the
          gradient radius so the fade reaches zero alpha exactly at the view's
@@ -60,7 +60,7 @@
                             android:layout_height="40dp"
                             android:layout_gravity="center"
                             android:src="@drawable/ic_stat_terminal"
-                            android:tint="@color/on_accent"
+                            android:tint="?attr/on_accent"
                             android:importantForAccessibility="no" />
                     </FrameLayout>
 
@@ -70,7 +70,7 @@
                         android:layout_gravity="center_horizontal"
                         android:layout_marginTop="@dimen/space_5"
                         android:text="@string/app_name"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="30sp"
                         android:letterSpacing="0.02"
                         android:fontFamily="sans-serif-medium" />
@@ -82,7 +82,7 @@
                         android:layout_marginTop="@dimen/space_1"
                         android:gravity="center"
                         android:text="@string/onb_tagline"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="15sp" />
 
                     <!-- Feature highlights. -->
@@ -98,7 +98,7 @@
                             android:padding="9dp"
                             android:background="@drawable/bg_icon_tile"
                             android:src="@drawable/ic_onb_cube"
-                            android:tint="@color/accent"
+                            android:tint="?attr/accent"
                             android:importantForAccessibility="no" />
 
                         <LinearLayout
@@ -112,7 +112,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/onb_feat_userland_title"
-                                android:textColor="@color/text_primary"
+                                android:textColor="?attr/text_primary"
                                 android:textSize="15sp"
                                 android:fontFamily="sans-serif-medium" />
 
@@ -121,7 +121,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="@string/onb_feat_userland_body"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="?attr/text_secondary"
                                 android:textSize="13sp"
                                 android:lineSpacingMultiplier="1.2" />
                         </LinearLayout>
@@ -139,7 +139,7 @@
                             android:padding="9dp"
                             android:background="@drawable/bg_icon_tile"
                             android:src="@drawable/ic_stat_terminal"
-                            android:tint="@color/accent"
+                            android:tint="?attr/accent"
                             android:importantForAccessibility="no" />
 
                         <LinearLayout
@@ -153,7 +153,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/onb_feat_terminal_title"
-                                android:textColor="@color/text_primary"
+                                android:textColor="?attr/text_primary"
                                 android:textSize="15sp"
                                 android:fontFamily="sans-serif-medium" />
 
@@ -162,7 +162,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="@string/onb_feat_terminal_body"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="?attr/text_secondary"
                                 android:textSize="13sp"
                                 android:lineSpacingMultiplier="1.2" />
                         </LinearLayout>
@@ -180,7 +180,7 @@
                             android:padding="9dp"
                             android:background="@drawable/bg_icon_tile"
                             android:src="@drawable/ic_onb_touch"
-                            android:tint="@color/accent"
+                            android:tint="?attr/accent"
                             android:importantForAccessibility="no" />
 
                         <LinearLayout
@@ -194,7 +194,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/onb_feat_touch_title"
-                                android:textColor="@color/text_primary"
+                                android:textColor="?attr/text_primary"
                                 android:textSize="15sp"
                                 android:fontFamily="sans-serif-medium" />
 
@@ -203,7 +203,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="@string/onb_feat_touch_body"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="?attr/text_secondary"
                                 android:textSize="13sp"
                                 android:lineSpacingMultiplier="1.2" />
                         </LinearLayout>
@@ -233,7 +233,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/onb_choose_title"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="24sp"
                         android:fontFamily="sans-serif-medium" />
 
@@ -242,7 +242,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_2"
                         android:text="@string/onb_choose_subtitle"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="14sp"
                         android:lineSpacingMultiplier="1.2" />
 
@@ -290,7 +290,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_6"
                         android:gravity="center"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="20sp"
                         android:fontFamily="sans-serif-medium" />
 
@@ -312,7 +312,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_3"
                         android:gravity="center"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="14sp" />
                 </LinearLayout>
             </ScrollView>
@@ -340,7 +340,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:gravity="center"
-                android:textColor="@color/on_accent"
+                android:textColor="?attr/on_accent"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:clickable="true"
@@ -352,7 +352,7 @@
                 android:layout_height="48dp"
                 android:layout_marginTop="@dimen/space_1"
                 android:gravity="center"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/text_secondary"
                 android:textSize="15sp"
                 android:fontFamily="sans-serif-medium"
                 android:clickable="true"

@@ -16,16 +16,10 @@ import android.view.Gravity;
 import io.github.sylirre.terminal.R;
 
 /**
- * The main screen's chrome colors, derived from the active terminal theme so
- * the top bar, tab strip, search bar and extra-keys toolbar frame the terminal
- * instead of clashing with it.
- *
- * Dark terminal backgrounds keep the stock token chrome verbatim — the app's
- * indigo-on-near-black identity, and the default theme renders exactly as
- * before. A light background (luminance ≥ 0.5, e.g. Solarized Light) derives
- * a light chrome: surfaces step the terminal color slightly toward black,
- * inks flip to near-black neutrals, and the caller flips the status-bar icon
- * appearance. The accent stays the fixed indigo brand color either way.
+ * The app theme's chrome colors as plain ints, resolved once from the
+ * Activity's palette attrs ({@link AppTheme}), for the views the main screen
+ * builds and recolors in code: top bar, tab strip, search bar, extra keys,
+ * nav bar, and the board page's CSS variables.
  *
  * Also carries drawable factories mirroring {@link Chrome}'s, resolved
  * against this palette instead of resource ids — views that follow the theme
@@ -77,39 +71,19 @@ public final class ChromePalette {
         this.onAccent = onAccent;
     }
 
-    /** The chrome palette for a terminal with the given background color. */
-    public static ChromePalette from(Context c, int terminalBg) {
-        int bg = terminalBg | 0xFF000000; // theme colors are opaque; make sure
-        int hairline = Chrome.dp(c, R.dimen.stroke_hairline);
-        if (Color.luminance(bg) < 0.5f) {
-            return new ChromePalette(false, hairline,
-                    Chrome.color(c, R.color.surface_base),
-                    Chrome.color(c, R.color.surface_1),
-                    Chrome.color(c, R.color.surface_2),
-                    Chrome.color(c, R.color.surface_3),
-                    Chrome.color(c, R.color.surface_4),
-                    Chrome.color(c, R.color.divider),
-                    Chrome.color(c, R.color.border),
-                    Chrome.color(c, R.color.text_primary),
-                    Chrome.color(c, R.color.text_secondary),
-                    Chrome.color(c, R.color.text_tertiary),
-                    Chrome.color(c, R.color.accent),
-                    Chrome.color(c, R.color.accent_pressed),
-                    Chrome.color(c, R.color.accent_deep),
-                    Chrome.color(c, R.color.accent_translucent),
-                    Chrome.color(c, R.color.on_accent));
-        }
-        return new ChromePalette(true, hairline,
-                bg,
-                mix(bg, Color.BLACK, 0.045f),
-                mix(bg, Color.BLACK, 0.08f),
-                mix(bg, Color.BLACK, 0.13f),
-                mix(bg, Color.BLACK, 0.18f),
-                0x14000000,
-                0x1F000000,
-                0xFF1B1B22,
-                0xFF565660,
-                0xFF8B8B96,
+    /** The chrome palette of {@code c}'s theme (the app theme, see {@link AppTheme}). */
+    public static ChromePalette from(Context c) {
+        return new ChromePalette(AppTheme.isLight(c), Chrome.dp(c, R.dimen.stroke_hairline),
+                Chrome.color(c, R.color.surface_base),
+                Chrome.color(c, R.color.surface_1),
+                Chrome.color(c, R.color.surface_2),
+                Chrome.color(c, R.color.surface_3),
+                Chrome.color(c, R.color.surface_4),
+                Chrome.color(c, R.color.divider),
+                Chrome.color(c, R.color.border),
+                Chrome.color(c, R.color.text_primary),
+                Chrome.color(c, R.color.text_secondary),
+                Chrome.color(c, R.color.text_tertiary),
                 Chrome.color(c, R.color.accent),
                 Chrome.color(c, R.color.accent_pressed),
                 Chrome.color(c, R.color.accent_deep),
@@ -118,7 +92,7 @@ public final class ChromePalette {
     }
 
     /** Per-channel lerp of {@code color} toward {@code toward} by {@code f}. */
-    private static int mix(int color, int toward, float f) {
+    static int mix(int color, int toward, float f) {
         int r = Math.round(Color.red(color) + (Color.red(toward) - Color.red(color)) * f);
         int g = Math.round(Color.green(color) + (Color.green(toward) - Color.green(color)) * f);
         int b = Math.round(Color.blue(color) + (Color.blue(toward) - Color.blue(color)) * f);

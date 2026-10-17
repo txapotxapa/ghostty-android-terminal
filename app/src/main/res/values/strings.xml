@@ -293,11 +293,13 @@
     </integer-array>
 
     <!-- Settings: Terminal theme -->
-    <string name="setting_theme_title">Terminal theme</string>
+    <string name="setting_app_theme_title">Theme</string>
+    <string name="setting_app_theme_summary">Colors for the whole app: agents, terminal and settings.</string>
+    <string name="setting_theme_title">Terminal style</string>
     <string name="setting_theme_summary">Fonts, colors, cursor shape and wallpaper for the terminal.</string>
 
     <!-- Theme editor -->
-    <string name="theme_activity_title">Terminal theme</string>
+    <string name="theme_activity_title">Terminal style</string>
     <string name="theme_done">Done</string>
     <string name="theme_section_background">Background</string>
     <string name="theme_section_cursor">Cursor</string>

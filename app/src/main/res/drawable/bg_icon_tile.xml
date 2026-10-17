@@ -2,6 +2,6 @@
 <!-- Small rounded accent-tinted tile behind onboarding feature icons. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="@color/accent_soft" />
+    <solid android:color="?attr/accent_soft" />
     <corners android:radius="@dimen/radius_md" />
 </shape>

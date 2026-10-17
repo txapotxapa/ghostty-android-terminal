@@ -5,7 +5,6 @@ package io.github.sylirre.terminal.ui;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.text.Editable;
 import android.text.InputType;
@@ -13,7 +12,6 @@ import android.text.TextWatcher;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.InputMethodManager;
@@ -71,7 +69,7 @@ public class SearchBarView extends LinearLayout implements TerminalView.SearchLi
         super(context, attrs);
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
-        palette = ChromePalette.from(context, Color.BLACK);
+        palette = ChromePalette.from(context);
         // Same height and side padding as the top bar it hangs under, so the
         // trailing buttons line up in the same columns.
         setMinimumHeight(Chrome.dp(context, R.dimen.top_bar_height));

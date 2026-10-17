@@ -99,9 +99,10 @@ public final class ExtraKeysActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppTheme.apply(this);
         setContentView(R.layout.activity_extra_keys);
 
-        palette = ChromePalette.from(this, android.graphics.Color.BLACK);
+        palette = ChromePalette.from(this);
         TopBarView topBar = findViewById(R.id.top_bar);
         topBar.setTitle(getString(R.string.extra_keys_title));
         topBar.setOnBack(this::finish);

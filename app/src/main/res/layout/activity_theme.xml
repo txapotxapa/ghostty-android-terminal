@@ -9,7 +9,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/surface_base">
+    android:background="?attr/surface_base">
 
     <io.github.sylirre.terminal.ui.TopBarView
         android:id="@+id/top_bar"
@@ -69,7 +69,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_bg_image_label"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Button
@@ -101,7 +101,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/theme_bg_image_opacity"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="@dimen/text_row_summary" />
 
                     <SeekBar
@@ -126,7 +126,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/theme_bg_image_blur"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/text_secondary"
                         android:textSize="@dimen/text_row_summary" />
 
                     <SeekBar
@@ -164,7 +164,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_cursor_style"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Button
@@ -187,7 +187,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_cursor_blink"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Switch
@@ -222,7 +222,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_font_default"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Button
@@ -254,7 +254,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_font_bold"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Button
@@ -286,7 +286,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_font_italic"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Button
@@ -318,7 +318,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/theme_font_bold_italic"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/text_primary"
                         android:textSize="@dimen/text_row_title" />
 
                     <Button
@@ -362,7 +362,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/theme_picker_label"
-                        android:textColor="@color/text_secondary" />
+                        android:textColor="?attr/text_secondary" />
 
                     <Button
                         android:id="@+id/theme_name"

@@ -29,8 +29,8 @@ import io.github.sylirre.terminal.R;
  * Home, Terminal and Activity are places: the current one wears an
  * indicator pill and the strong ink. Settings opens its own screen and is
  * never current. Home and Activity carry count badges (agents waiting on
- * you), fed by the board page. {@link MainActivity} recolors the bar for the
- * screen it sits under (the board's tokens, or the terminal theme's chrome).
+ * you), fed by the board page. {@link MainActivity} colors it from the app
+ * theme's palette.
  */
 public class NavBarView extends LinearLayout {
 

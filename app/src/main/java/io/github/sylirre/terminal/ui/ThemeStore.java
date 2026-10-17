@@ -73,7 +73,16 @@ public final class ThemeStore {
 
     /** Name of the selected theme; defaults to the first preset. */
     public String selectedName() {
-        return prefs.getString(KEY_SELECTED, ThemePresets.DEFAULT.name);
+        String name = prefs.getString(KEY_SELECTED, ThemePresets.DEFAULT.name);
+        // The xterm preset was "Default" until Solarized Dark took that role.
+        return "Default".equals(name) && findUserTheme(name) == null ? "Classic" : name;
+    }
+
+    private TerminalTheme findUserTheme(String name) {
+        for (TerminalTheme t : userThemes()) {
+            if (t.name.equals(name)) return t;
+        }
+        return null;
     }
 
     public void setSelected(String name) {

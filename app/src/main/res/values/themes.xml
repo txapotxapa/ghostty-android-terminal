@@ -3,26 +3,51 @@
 
     <!-- App theme. Stays on the platform Material base (no appcompat/material
          dependency, per docs/architecture.md) but layers the design tokens on
-         top so widgets, ripples, dialogs and text colors all pick up the
-         indigo/violet identity for free. -->
+         top so widgets, ripples, dialogs and text colors all follow the app
+         theme's palette (ui/AppTheme). -->
     <style name="Theme.Terminal" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/surface_base</item>
+        <!-- Palette defaults (Classic); AppTheme overlays the selected Palette.*. -->
+        <item name="palette_light">false</item>
+        <item name="surface_base">@color/surface_base</item>
+        <item name="surface_1">@color/surface_1</item>
+        <item name="surface_2">@color/surface_2</item>
+        <item name="surface_3">@color/surface_3</item>
+        <item name="surface_4">@color/surface_4</item>
+        <item name="divider">@color/divider</item>
+        <item name="border">@color/border</item>
+        <item name="text_primary">@color/text_primary</item>
+        <item name="text_secondary">@color/text_secondary</item>
+        <item name="text_tertiary">@color/text_tertiary</item>
+        <item name="on_accent">@color/on_accent</item>
+        <item name="accent">@color/accent</item>
+        <item name="accent_pressed">@color/accent_pressed</item>
+        <item name="accent_deep">@color/accent_deep</item>
+        <item name="accent_translucent">@color/accent_translucent</item>
+        <item name="accent_soft">@color/accent_soft</item>
+        <item name="danger">@color/danger</item>
+        <item name="danger_pressed">@color/danger_pressed</item>
+        <item name="success">@color/success</item>
+        <item name="warning">@color/warning</item>
+        <item name="nav_badge">@color/nav_badge</item>
+        <item name="nav_badge_ink">@color/nav_badge_ink</item>
+
+        <item name="android:windowBackground">?attr/surface_base</item>
 
         <!-- Accent drives Switch/SeekBar/CheckBox/EditText/progress tinting. -->
-        <item name="android:colorAccent">@color/accent</item>
-        <item name="android:colorPrimary">@color/surface_1</item>
-        <item name="android:colorPrimaryDark">@color/surface_base</item>
+        <item name="android:colorAccent">?attr/accent</item>
+        <item name="android:colorPrimary">?attr/surface_1</item>
+        <item name="android:colorPrimaryDark">?attr/surface_base</item>
 
-        <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="android:textColorSecondary">@color/text_secondary</item>
-        <item name="android:textColorTertiary">@color/text_tertiary</item>
-        <item name="android:textColorHint">@color/text_tertiary</item>
-        <item name="android:textColorHighlight">@color/accent_translucent</item>
+        <item name="android:textColorPrimary">?attr/text_primary</item>
+        <item name="android:textColorSecondary">?attr/text_secondary</item>
+        <item name="android:textColorTertiary">?attr/text_tertiary</item>
+        <item name="android:textColorHint">?attr/text_tertiary</item>
+        <item name="android:textColorHighlight">?attr/accent_translucent</item>
 
-        <item name="android:colorControlNormal">@color/text_secondary</item>
-        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlNormal">?attr/text_secondary</item>
+        <item name="android:colorControlActivated">?attr/accent</item>
         <!-- Accent-tinted touch ripples on every ?selectableItemBackground. -->
-        <item name="android:colorControlHighlight">@color/accent_translucent</item>
+        <item name="android:colorControlHighlight">?attr/accent_translucent</item>
 
         <!-- Edge-to-edge: content pads itself past the bars, so let them show
              the window background rather than an opaque band. -->
@@ -41,13 +66,13 @@
     <style name="Theme.Terminal.Dialog" parent="@android:style/Theme.Material.Dialog.Alert">
         <item name="android:windowBackground">@drawable/bg_dialog</item>
         <item name="android:backgroundDimAmount">0.6</item>
-        <item name="android:colorAccent">@color/accent</item>
-        <item name="android:colorControlActivated">@color/accent</item>
-        <item name="android:colorControlHighlight">@color/accent_translucent</item>
-        <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="android:textColorSecondary">@color/text_secondary</item>
-        <item name="android:textColorHint">@color/text_tertiary</item>
-        <item name="android:textColorHighlight">@color/accent_translucent</item>
+        <item name="android:colorAccent">?attr/accent</item>
+        <item name="android:colorControlActivated">?attr/accent</item>
+        <item name="android:colorControlHighlight">?attr/accent_translucent</item>
+        <item name="android:textColorPrimary">?attr/text_primary</item>
+        <item name="android:textColorSecondary">?attr/text_secondary</item>
+        <item name="android:textColorHint">?attr/text_tertiary</item>
+        <item name="android:textColorHighlight">?attr/accent_translucent</item>
     </style>
 
 </resources>
