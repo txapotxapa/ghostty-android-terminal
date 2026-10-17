@@ -26,18 +26,6 @@
             android:elevation="@dimen/elevation_bar"
             android:background="@drawable/bg_top_bar">
 
-            <ImageView
-                android:id="@+id/home_button"
-                android:layout_width="@dimen/icon_button"
-                android:layout_height="@dimen/icon_button"
-                android:layout_marginEnd="@dimen/space_1"
-                android:layout_gravity="center_vertical"
-                android:padding="11dp"
-                android:src="@drawable/ic_glyph_home"
-                android:contentDescription="@string/home_button_description"
-                android:clickable="true"
-                android:focusable="true" />
-
             <io.github.sylirre.terminal.ui.TabStripView
                 android:id="@+id/tabs"
                 android:layout_width="0dp"
@@ -136,17 +124,6 @@
             android:id="@+id/extra_keys"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
-
-        <!-- Bottom bar (Agents / Shell / Activity), filled by MainActivity;
-             hidden while the soft keyboard is up. -->
-        <LinearLayout
-            android:id="@+id/main_nav"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingTop="@dimen/space_2"
-            android:paddingBottom="@dimen/space_2" />
 
     </LinearLayout>
 

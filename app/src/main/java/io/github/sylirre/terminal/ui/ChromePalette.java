@@ -21,11 +21,11 @@ import io.github.sylirre.terminal.R;
  * instead of clashing with it.
  *
  * Dark terminal backgrounds keep the stock token chrome verbatim — the app's
- * mint-on-near-black identity, and the default theme renders exactly as
+ * indigo-on-near-black identity, and the default theme renders exactly as
  * before. A light background (luminance ≥ 0.5, e.g. Solarized Light) derives
  * a light chrome: surfaces step the terminal color slightly toward black,
  * inks flip to near-black neutrals, and the caller flips the status-bar icon
- * appearance. The accent stays the fixed mint brand color either way.
+ * appearance. The accent stays the fixed indigo brand color either way.
  *
  * Also carries drawable factories mirroring {@link Chrome}'s, resolved
  * against this palette instead of resource ids — views that follow the theme
@@ -178,13 +178,8 @@ public final class ChromePalette {
      * the bottom edge; the extra-keys toolbar uses the top edge.
      */
     public LayerDrawable barSurface(boolean edgeAtBottom) {
-        return barSurface(edgeAtBottom, surface1);
-    }
-
-    /** As {@link #barSurface(boolean)} on another fill (the key row sits on the terminal ground). */
-    public LayerDrawable barSurface(boolean edgeAtBottom, int fill) {
         LayerDrawable d = new LayerDrawable(new ColorDrawable[]{
-                new ColorDrawable(fill), new ColorDrawable(divider)});
+                new ColorDrawable(surface1), new ColorDrawable(divider)});
         d.setLayerHeight(1, hairlinePx);
         d.setLayerGravity(1, edgeAtBottom ? Gravity.BOTTOM : Gravity.TOP);
         return d;

@@ -1,41 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher adaptive-icon background (the design's near-black ground). -->
-    <color name="launcher_bg">#121314</color>
+    <!-- Launcher adaptive-icon background (indigo-tinted near-black, matches
+         the in-app surface identity). -->
+    <color name="launcher_bg">#0B0B12</color>
 
     <!-- ================= App chrome design tokens (dark-only) =================
          Every non-terminal surface draws from these. Layouts and the
          programmatically built views (via ui/Chrome.java) share one source. -->
 
     <!-- Layered surfaces, darkest (app root, behind the terminal) to lightest. -->
-    <color name="surface_base">#0A0B0C</color>
-    <color name="surface_1">#121314</color>
-    <color name="surface_2">#151618</color>
-    <color name="surface_3">#1F2124</color>
-    <color name="surface_4">#26282C</color>
+    <color name="surface_base">#0B0B10</color>
+    <color name="surface_1">#14141B</color>
+    <color name="surface_2">#1C1C26</color>
+    <color name="surface_3">#262633</color>
+    <color name="surface_4">#33333F</color>
 
-    <!-- Hairlines and strokes. -->
-    <color name="divider">#1E2023</color>
-    <color name="border">#2A2C30</color>
+    <!-- Hairlines and strokes (white at low alpha so they read on any surface). -->
+    <color name="divider">#14FFFFFF</color>
+    <color name="border">#24FFFFFF</color>
 
     <!-- Text. -->
-    <color name="text_primary">#ECECEA</color>
-    <color name="text_secondary">#9A9C9F</color>
-    <color name="text_tertiary">#6E7074</color>
-    <color name="on_accent">#FF0E1412</color>
+    <color name="text_primary">#F3F3F7</color>
+    <color name="text_secondary">#A6A6B5</color>
+    <color name="text_tertiary">#6F6F82</color>
+    <color name="on_accent">#FFFFFFFF</color>
 
-    <!-- Accent (mint, from the agent-board design). -->
-    <color name="accent">#7FD1B9</color>
-    <color name="accent_pressed">#A8E3D1</color>
-    <color name="accent_deep">#3F8F78</color>
-    <color name="accent_translucent">#337FD1B9</color>
-    <color name="accent_soft">#1F7FD1B9</color>
+    <!-- Accent (indigo / violet). -->
+    <color name="accent">#7C6CF6</color>
+    <color name="accent_pressed">#9384F8</color>
+    <color name="accent_deep">#4C3FB0</color>
+    <color name="accent_translucent">#337C6CF6</color>
+    <color name="accent_soft">#1F7C6CF6</color>
 
     <!-- Semantic. -->
-    <color name="danger">#F07A6A</color>
-    <color name="danger_pressed">#F3A397</color>
-    <color name="success">#7FD1B9</color>
-    <color name="warning">#E6B450</color>
+    <color name="danger">#FF6B7A</color>
+    <color name="danger_pressed">#FF8A96</color>
+    <color name="success">#4CD964</color>
+    <color name="warning">#D9A441</color>
 
     <!-- Dialog scrim. -->
     <color name="scrim">#99000000</color>
@@ -43,8 +44,8 @@
     <!-- Onboarding distro-card branding (monogram tile fill + letter ink). -->
     <color name="onb_alpine_tile">#2E2F9ED9</color>
     <color name="onb_alpine_ink">#8FD4F5</color>
-    <color name="onb_omarchy_tile">#2E7FD1B9</color>
-    <color name="onb_omarchy_ink">#7FD1B9</color>
+    <color name="onb_omarchy_tile">#2E7AA2F7</color>
+    <color name="onb_omarchy_ink">#7AA2F7</color>
     <color name="onb_debian_tile">#2EE04A6F</color>
     <color name="onb_debian_ink">#FF7D9C</color>
 </resources>

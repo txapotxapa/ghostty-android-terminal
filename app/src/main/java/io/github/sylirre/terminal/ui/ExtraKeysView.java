@@ -107,7 +107,7 @@ public class ExtraKeysView extends LinearLayout {
         super(context, attrs);
         setOrientation(VERTICAL);
         palette = ChromePalette.from(context, android.graphics.Color.BLACK);
-        setBackground(palette.barSurface(false, palette.surfaceBase));
+        setBackground(palette.barSurface(false));
         // Half the cap gap: each cap carries key_gap/2 margins on every side,
         // so this makes the outer gutters equal the 4dp inner ones.
         int pad = Chrome.dp(context, R.dimen.key_gap) / 2;
@@ -121,7 +121,7 @@ public class ExtraKeysView extends LinearLayout {
     /** Re-derives the toolbar's colors from a new chrome palette. */
     public void applyPalette(ChromePalette p) {
         palette = p;
-        setBackground(palette.barSurface(false, palette.surfaceBase));
+        setBackground(palette.barSurface(false));
         reload();
     }
 
@@ -280,7 +280,7 @@ public class ExtraKeysView extends LinearLayout {
     private View controlCap(int icon, int description, Runnable action) {
         ImageView v = new ImageView(getContext());
         v.setImageResource(icon);
-        v.setImageTintList(ColorStateList.valueOf(palette.textPrimary));
+        v.setImageTintList(ColorStateList.valueOf(palette.accent));
         v.setScaleType(ImageView.ScaleType.FIT_CENTER);
         int pad = Chrome.dp(getContext(), R.dimen.key_pad_h);
         v.setPadding(pad, pad, pad, pad);
@@ -298,7 +298,7 @@ public class ExtraKeysView extends LinearLayout {
     private View buildSwitchColumn() {
         ImageView v = new ImageView(getContext());
         v.setImageResource(R.drawable.ic_glyph_layers);
-        v.setImageTintList(ColorStateList.valueOf(palette.textPrimary));
+        v.setImageTintList(ColorStateList.valueOf(palette.accent));
         v.setScaleType(ImageView.ScaleType.FIT_CENTER);
         int pad = Chrome.dp(getContext(), R.dimen.key_pad_h);
         // Vertical padding follows the row-height setting like the caps do.

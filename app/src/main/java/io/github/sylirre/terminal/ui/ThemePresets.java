@@ -20,15 +20,7 @@ final class ThemePresets {
 
     /** All presets, in display order; {@code get(0)} is {@link #DEFAULT}. */
     static final List<TerminalTheme> ALL = Collections.unmodifiableList(Arrays.asList(
-        // A-SH: the agent-board design's palette (mint / amber / coral on
-        // near-black); the default.
-        t("A-SH", 0xFFC9CAC6, 0xFF0A0B0C, 0xFFECECEA,
-            0xFF1F2124, 0xFFF07A6A, 0xFF7FD1B9, 0xFFE6B450,
-            0xFF8FB7F0, 0xFFC6A0F6, 0xFF8FDCC2, 0xFFC9CAC6,
-            0xFF6E7074, 0xFFF3A397, 0xFFA8E3D1, 0xFFF0C674,
-            0xFFB4CEF5, 0xFFD9BFF9, 0xFFB5EADB, 0xFFECECEA),
-
-        // Classic xterm palette, white on black.
+        // Default: classic xterm palette, white on black.
         t("Default", 0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF,
             0xFF000000, 0xFFCD0000, 0xFF00CD00, 0xFFCDCD00,
             0xFF0000EE, 0xFFCD00CD, 0xFF00CDCD, 0xFFE5E5E5,
