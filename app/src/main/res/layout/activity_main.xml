@@ -130,8 +130,8 @@
 
         </FrameLayout>
 
-        <!-- Bottom navigation: Home / Terminal / Activity / Settings, always
-             shown (see NavBarView). -->
+        <!-- Bottom navigation: Home / Terminal / Activity / Settings; hidden
+             while the soft keyboard is up (see NavBarView). -->
         <io.github.sylirre.terminal.ui.NavBarView
             android:id="@+id/main_nav"
             android:layout_width="match_parent"

@@ -23,9 +23,8 @@ import io.github.sylirre.terminal.R;
 /**
  * The app's bottom navigation — Home (the agent board), Terminal, Activity
  * and Settings — under every main screen: the board, each of its
- * sub-screens and the terminal, keyboard up or not, so home and settings are
- * always one tap away. It never hides, and its height never changes, so it
- * never resizes the terminal (no SIGWINCH to the shell).
+ * sub-screens and the terminal, so home and settings are always one tap
+ * away. MainActivity hides it while the soft keyboard is up.
  *
  * Home, Terminal and Activity are places: the current one wears an
  * indicator pill and the strong ink. Settings opens its own screen and is

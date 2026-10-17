@@ -131,6 +131,15 @@ public class TerminalUiTest {
                 ((TerminalView) a.findViewById(R.id.terminal)).dispatchText(text));
     }
 
+    /**
+     * Opens Settings from the nav bar. The bar steps aside while the soft
+     * keyboard is up, so close the keyboard first, as a user would.
+     */
+    private void openSettings() {
+        androidx.test.espresso.Espresso.closeSoftKeyboard();
+        onView(withId(R.id.settings_button)).perform(click());
+    }
+
     private String diagnose() {
         StringBuilder sb = new StringBuilder();
         List<TerminalSession> all = SessionManager.get().sessions();
@@ -274,7 +283,7 @@ public class TerminalUiTest {
 
     @Test
     public void extraKeysSettingOpensEditor() {
-        onView(withId(R.id.settings_button)).perform(click());
+        openSettings();
         // Settings is now a full screen (SettingsActivity), not a dialog.
         onView(withText(R.string.setting_extra_keys_title))
                 .perform(scrollTo(), click());
@@ -293,7 +302,7 @@ public class TerminalUiTest {
 
         // Turn the row off via the settings toggle, then return to the terminal;
         // MainActivity.onResume re-applies the persisted toggle.
-        onView(withId(R.id.settings_button)).perform(click());
+        openSettings();
         onView(withText(R.string.setting_extra_keys_enabled_title))
                 .perform(scrollTo(), click());
         pressBack();
@@ -392,14 +401,14 @@ public class TerminalUiTest {
 
         // Open the settings screen (gear in the top bar), tap the row to enable
         // the toggle, then return — MainActivity.onResume applies the change.
-        onView(withId(R.id.settings_button)).perform(click());
+        openSettings();
         onView(withText("Keep screen on")).perform(scrollTo(), click());
         pressBack();
         assertTrue("flag set after enabling", keepScreenOnFlag());
 
         // Reopen and disable it, leaving the shared preference clean for
         // other tests (the setting persists across activity instances).
-        onView(withId(R.id.settings_button)).perform(click());
+        openSettings();
         onView(withText("Keep screen on")).perform(scrollTo(), click());
         pressBack();
         assertFalse("flag cleared after disabling", keepScreenOnFlag());

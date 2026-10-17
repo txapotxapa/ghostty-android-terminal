@@ -258,12 +258,28 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             }
             MainActivity.this.imeVisible = imeVisible;
             extraKeys.setKeyboardVisible(imeVisible);
+            // The nav bar steps aside while typing (terminal or board) and
+            // returns with the keyboard's dismissal; same layout pass as the
+            // IME resize, so the terminal resizes once.
+            nav.setVisibility(imeVisible ? View.GONE : View.VISIBLE);
             // WindowInsets.CONSUMED is API 30; on 29 (our minSdk) touching it
             // throws NoSuchFieldError, so consume the old way there.
             return Build.VERSION.SDK_INT >= 30
                     ? WindowInsets.CONSUMED
                     : insets.consumeSystemWindowInsets();
         });
+
+        // Some window setups consume the insets before the listener above
+        // sees them; the layout pass that follows every IME show/hide
+        // catches those too, so the nav bar always steps aside for typing.
+        if (Build.VERSION.SDK_INT >= 30) {
+            root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                WindowInsets now = root.getRootWindowInsets();
+                if (now == null) return;
+                int want = now.isVisible(WindowInsets.Type.ime()) ? View.GONE : View.VISIBLE;
+                if (nav.getVisibility() != want) nav.setVisibility(want);
+            });
+        }
 
         tabs.setListener(new TabStripView.Listener() {
             @Override
