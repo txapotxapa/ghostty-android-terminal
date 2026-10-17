@@ -449,11 +449,29 @@ function parseLog(g, text) {
     return tidyPath(h, p);
   };
   const results = new Map();
+  // Messages sent while Claude Code is busy: logged as queue operations
+  // (enqueue, then dequeue / remove / popAll) rather than user messages, and,
+  // when the agent takes one in mid-turn, as a queued_command attachment.
+  const queued = [];
   for (const l of lines) {
     if (!l || l[0] !== '{') continue;
     let o; try { o = JSON.parse(l); } catch (e) { continue; }
     const t = Date.parse(o.timestamp || '') || 0;
     if (g.kind === 'claude') {
+      if (o.type === 'queue-operation') {
+        const c = typeof o.content === 'string' ? o.content.trim() : '';
+        if (o.operation === 'enqueue') { if (c) queued.push({ text: c, t }); }
+        else if (c) { const i = queued.findIndex((q) => q.text === c); if (i >= 0) queued.splice(i, 1); }
+        else queued.length = 0;
+        continue;
+      }
+      if (o.type === 'attachment') {
+        const a = o.attachment || {};
+        if (a.type === 'queued_command' && a.commandMode === 'prompt' && (a.humanTurn || a.origin?.kind === 'human')) {
+          pushUser(out, a.prompt, Date.parse(a.timestamp || '') || t);
+        }
+        continue;
+      }
       if (o.isMeta || o.isSidechain) continue;
       const m = o.message; if (!m) continue;
       if (o.type === 'user') {
@@ -486,6 +504,7 @@ function parseLog(g, text) {
     }
   }
   for (const e of out) if (e.kind === 'tool' && results.has(e.id)) { const r = results.get(e.id); e.result = r.text; e.err = r.err; }
+  out.queued = queued;
   return out;
 }
 function flat(c) {
@@ -760,10 +779,22 @@ function withPaths(text, paths, items) {
   return `${msg} (attached ${what}: ${paths.join(' ')})`;
 }
 async function sendToAgent(g, text, items) {
-  const paths = [];
-  for (const a of items) paths.push(await uploadAtt(g.host, a.token));
-  await herdr(g.host, 'agent', 'prompt', g.pane, items.length ? withPaths(text, paths, items) : text);
-  for (const a of items) try { N.dropAttachment(a.token); } catch (e) {}
+  // Shown in the chat straight away, until the session log has it.
+  const m = { text: text || (items.length ? 'Attachment…' : ''), state: 'sending', at: now() };
+  (g.outbox = g.outbox || []).push(m); render();
+  try {
+    const paths = [];
+    for (const a of items) paths.push(await uploadAtt(g.host, a.token));
+    m.text = items.length ? withPaths(text, paths, items) : text;
+    const busy = g.status === 'working' || g.status === 'blocked';
+    await herdr(g.host, 'agent', 'prompt', g.pane, m.text);
+    m.state = busy ? 'queued' : 'sent'; m.at = now(); render();
+    for (const a of items) try { N.dropAttachment(a.token); } catch (e) {}
+    return m.state;
+  } catch (e) {
+    g.outbox = g.outbox.filter((x) => x !== m); render();
+    throw e;
+  }
 }
 
 // ------------------------------------------------------------------ routing
@@ -773,8 +804,7 @@ function push(v) { ui.stack.push(v); ui.anim = 'enter'; render(); }
 function goBack() {
   if (ui.sheet) { closeSheet(); return true; }
   if (ui.stack.length > 1) { ui.stack.pop(); ui.anim = null; render(); return true; }
-  if (ui.tab !== 'board') { setTab('board'); return true; }
-  return false;
+  return false;   // Home ↔ Activity ↔ Terminal is the app's back history (MainActivity)
 }
 function setTab(t) {
   ui.tab = t; ui.stack = [{ v: t }]; ui.anim = null;
@@ -816,6 +846,7 @@ function renderNow() {
     morph(el, html, false);
   }
   renderSheet();
+  if (v.slide) { const d = $('#dscroll'); if (d) d.classList.add(v.slide > 0 ? 'from-right' : 'from-left'); v.slide = 0; }
   renderAtts('steer');
   renderAtts('newprompt');
 }
@@ -841,10 +872,13 @@ function morph(el, html, fresh) {
 let navSent = '';
 function pushNav() {
   const needs = [...agents.values()].filter((g) => g.status === 'blocked' && !g.gone).length;
-  const s = ui.tab + '|' + needs + '|' + unseenNeeds;
+  // Whether back has somewhere to go inside the board (a sheet, a sub-screen);
+  // moving between Home, Activity and the terminal is the app's history.
+  const canBack = !!ui.sheet || ui.stack.length > 1;
+  const s = [ui.tab, needs, unseenNeeds, canBack].join('|');
   if (s === navSent) return;
   navSent = s;
-  try { N.nav(ui.tab, needs, unseenNeeds); } catch (e) {}
+  try { N.nav(ui.tab, needs, unseenNeeds, canBack); } catch (e) {}
 }
 
 // ---- board
@@ -1034,7 +1068,24 @@ function chatHtml(g) {
   }
   flushSteps();
   if (g.status === 'working') items.push('<div class="steps" style="border-style:dashed">● working…</div>');
+  for (const p of pendingMessages(g)) items.push(`<div class="msg me pending">${esc(p.text)}<small>${esc(p.note)}</small></div>`);
   return `<div class="chat">${items.slice(-60).join('') || '<div class="tail empty">No messages yet.</div>'}</div>`;
+}
+
+// What you sent that the log doesn't show as delivered yet: still in Claude
+// Code's queue, or just sent from here (the outbox) and not logged yet. A
+// message is never invisible between tapping Send and the agent reading it.
+const QUEUED_NOTE = 'Queued · it\'ll read this at its next step';
+function pendingMessages(g) {
+  const norm = (x) => String(x || '').replace(/\s+/g, ' ').trim();
+  const busy = g.status === 'working' || g.status === 'blocked';
+  const queued = (g.queued || []).filter((q) => busy || now() - q.t < 60000);
+  const seen = new Set([...(g.log || []).filter((e) => e.kind === 'user').slice(-20).map((e) => norm(e.text)), ...queued.map((q) => norm(q.text))]);
+  g.outbox = (g.outbox || []).filter((m) => !seen.has(norm(m.text)) && (m.state === 'sending' || now() - m.at < 120000));
+  return [
+    ...queued.map((q) => ({ text: q.text, note: QUEUED_NOTE })),
+    ...g.outbox.map((m) => ({ text: m.text, note: m.state === 'sending' ? 'Sending…' : m.state === 'queued' ? QUEUED_NOTE : 'Sent' })),
+  ];
 }
 
 function screenHtml(g) {
@@ -1055,7 +1106,7 @@ async function loadDetail(g, first) {
     if (g.status === 'blocked') g.menu = parseMenu(await screen(g, 'visible', false)); else g.menu = null;
     if (v.tab === 'screen') g.screen = tidyScreen((await screen(g, 'visible', true)).replace(/\n+$/, ''));
     else if (hasLog(g)) {
-      try { g.log = await sessionLog(g, 400000); g.noLog = false; }
+      try { g.log = await sessionLog(g, 400000); g.queued = g.log.queued || []; g.noLog = false; }
       catch (e) { g.noLog = true; if (first && v.tab !== 'screen') { v.tab = 'screen'; return loadDetail(g, true); } }
     }
   } catch (e) {
@@ -1581,6 +1632,70 @@ document.addEventListener('pointerdown', (e) => {
 ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => document.addEventListener(t, () => { clearTimeout(pressTimer); pressed = null; }));
 document.addEventListener('scroll', () => clearTimeout(pressTimer), true);
 
+// ---- swipe between an agent's Chat / Trace / Terminal (X-style)
+//
+// The body follows the finger; let go past a fifth of the width (or flick)
+// and the neighbouring tab slides in from that side; short of it, it springs
+// back. Mostly-vertical drags stay scrolls, a block that can still scroll
+// sideways (code, a wide screen) keeps its own swipe, and touches starting at
+// the screen edges are left to Android's back gesture.
+
+function detailTabs(g) { return hasLog(g) ? ['chat', 'trace', 'screen'] : ['screen']; }
+function showDetailTab(t, dir) {
+  const v = cur(); const a = agents.get(v.key);
+  if (v.v !== 'detail' || !a || v.tab === t) return;
+  v.tab = t; v.slide = dir || 0;
+  a.screen = a.screen || null;
+  render(); loadDetail(a, true);
+}
+function scrollsSideways(node, dx) {
+  for (let n = node; n && n.id !== 'dscroll'; n = n.parentElement) {
+    if (n.scrollWidth <= n.clientWidth + 1) continue;
+    const ox = getComputedStyle(n).overflowX;
+    if (ox !== 'auto' && ox !== 'scroll') continue;
+    if (dx < 0 && n.scrollLeft + n.clientWidth < n.scrollWidth - 1) return true;
+    if (dx > 0 && n.scrollLeft > 0) return true;
+  }
+  return false;
+}
+const swipe = { el: null };
+document.addEventListener('touchstart', (e) => {
+  swipe.el = null;
+  const body = e.target.closest && e.target.closest('#dscroll');
+  if (!body || cur().v !== 'detail' || ui.sheet || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  if (t.clientX < 24 || t.clientX > innerWidth - 24) return;
+  Object.assign(swipe, { el: body, target: e.target, x0: t.clientX, y0: t.clientY, dx: 0, on: false, dead: false, t0: performance.now() });
+}, { passive: true });
+document.addEventListener('touchmove', (e) => {
+  if (!swipe.el || swipe.dead) return;
+  const t = e.touches[0];
+  const dx = t.clientX - swipe.x0, dy = t.clientY - swipe.y0;
+  if (!swipe.on) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    if (Math.abs(dx) < Math.abs(dy) * 1.3 || scrollsSideways(swipe.target, dx)) { swipe.dead = true; return; }
+    swipe.on = true; swipe.el.style.transition = 'none';
+  }
+  const v = cur(); const g = agents.get(v.key); const tabs = g ? detailTabs(g) : []; const i = tabs.indexOf(v.tab);
+  const end = (dx > 0 && i <= 0) || (dx < 0 && i >= tabs.length - 1);
+  swipe.dx = end ? dx / 4 : dx;          // rubber band where there is no next tab
+  swipe.el.style.transform = `translateX(${swipe.dx}px)`;
+  e.preventDefault();
+}, { passive: false });
+function endSwipe() {
+  const el = swipe.el; swipe.el = null;
+  if (!el || !swipe.on) return;
+  const v = cur(); const g = agents.get(v.key); const tabs = g ? detailTabs(g) : []; const i = tabs.indexOf(v.tab);
+  const dir = swipe.dx < 0 ? 1 : -1;
+  const fast = Math.abs(swipe.dx) / Math.max(1, performance.now() - swipe.t0) > 0.5;
+  const far = Math.abs(swipe.dx) > innerWidth * 0.2;
+  const next = tabs[i + dir];
+  if (next && Math.abs(swipe.dx) > 30 && (far || fast)) { haptic(); showDetailTab(next, dir); return; }
+  el.style.transition = 'transform .18s ease-out'; el.style.transform = '';
+}
+document.addEventListener('touchend', endSwipe);
+document.addEventListener('touchcancel', endSwipe);
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
@@ -1593,7 +1708,7 @@ document.addEventListener('click', async (e) => {
     case 'go': push({ v: el.dataset.v }); break;
     case 'new': newAgent(); break;
     case 'agent': if (g) openDetail(g.key); break;
-    case 'dtab': { const v = cur(); if (v.v === 'detail') { v.tab = el.dataset.t; const a = agents.get(v.key); a && (a.screen = a.screen || null); render(); a && loadDetail(a, true); } break; }
+    case 'dtab': { const v = cur(); const a = agents.get(v.key); if (v.v === 'detail' && a) { const tabs = detailTabs(a); showDetailTab(el.dataset.t, Math.sign(tabs.indexOf(el.dataset.t) - tabs.indexOf(v.tab))); } break; }
     case 'review': if (g) reviewSheet(g); break;
     case 'agent-menu': if (g) agentMenu(g); break;
     case 'close-sheet': closeSheet(); break;
@@ -1606,7 +1721,7 @@ document.addEventListener('click', async (e) => {
       if (g.status === 'blocked') { toast('It\'s waiting on a question — answer it first'); reviewSheet(g); break; }
       ta.value = ''; atts.steer = []; renderAtts('steer'); syncSend(ta);
       if (items.length) toast(items.length > 1 ? `Sending ${items.length} attachments…` : 'Sending attachment…');
-      sendToAgent(g, t, items).then(() => { toast('Sent'); kick(hosts.get(g.host)); setTimeout(() => loadDetail(g, false), 600); })
+      sendToAgent(g, t, items).then((st) => { toast(st === 'queued' ? 'Queued — it\'ll read it at its next step' : 'Sent'); kick(hosts.get(g.host)); setTimeout(() => loadDetail(g, false), 600); })
         .catch((x) => { ta.value = t; atts.steer = items; renderAtts('steer'); syncSend(ta); toast(x.message); });
       break;
     }

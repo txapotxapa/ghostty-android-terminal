@@ -51,6 +51,10 @@ svg { flex: none; }
 .view.enter-up { animation: rise-in .24s cubic-bezier(.2,.8,.2,1); }
 @keyframes slide-in { from { transform: translateX(28px); opacity: 0; } }
 @keyframes rise-in { from { transform: translateY(24px); opacity: 0; } }
+#dscroll.from-right { animation: tab-from-right .2s cubic-bezier(.2,.8,.2,1); }
+#dscroll.from-left { animation: tab-from-left .2s cubic-bezier(.2,.8,.2,1); }
+@keyframes tab-from-right { from { transform: translateX(40%); opacity: .3; } }
+@keyframes tab-from-left { from { transform: translateX(-40%); opacity: .3; } }
 .scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .scroll::-webkit-scrollbar { display: none; }
 
@@ -165,6 +169,8 @@ svg { flex: none; }
 .chat { padding: 10px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14.5px; line-height: 1.5; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .msg.me { align-self: flex-end; background: #24332E; border-bottom-right-radius: 6px; white-space: pre-wrap; }
+.msg.me.pending { background: transparent; border: 1px dashed #3A4A44; color: var(--muted); }
+.msg.me.pending small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--faint); white-space: normal; }
 .msg.ai { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
 .msg.ai p { margin: 0 0 8px; } .msg.ai p:last-child { margin-bottom: 0; }
 .msg.ai ul, .msg.ai ol { margin: 0 0 8px; padding-left: 20px; }

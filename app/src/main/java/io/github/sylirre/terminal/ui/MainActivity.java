@@ -131,6 +131,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private BoardView board;
     /** The board's current root (HOME or ACTIVITY), lit in the nav bar while it is up. */
     private int boardTab = NavBarView.HOME;
+    /** The board has somewhere to go back to (a sheet, a sub-screen). */
+    private boolean boardCanBack;
+    /**
+     * Back history across the app's places (NavBarView HOME / TERMINAL /
+     * ACTIVITY), most recent first, each place once — back retraces the way
+     * you came, the way X or Instagram do their tabs, and can never loop.
+     */
+    private final java.util.ArrayDeque<Integer> places = new java.util.ArrayDeque<>();
     /** The paired computer each terminal tab is on, where known (opened from the board or a pairing). */
     private final java.util.Map<TerminalSession, String> tabHosts = new java.util.WeakHashMap<>();
     /** Who gets the next picked/captured attachments. */
@@ -205,13 +213,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         terminal.setTapToOpenLinks(settings.tapToOpenLinks());
         applyTextMargins();
         nav = findViewById(R.id.main_nav);
-        nav.setSelected(NavBarView.TERMINAL);
         nav.setListener(this::onNavItem);
         boolean startOnBoard = savedInstanceState != null
                 ? savedInstanceState.getBoolean(STATE_BOARD, false)
                 : !forceShell && pendingSshLink == null && settings.boardOnLaunch()
                         && !awaitingOnboarding && UserlandRootfs.isInstalled(this)
                         && !SshLinks.savedHosts(this).isEmpty();
+        // The first place is where the app opens; back history starts there.
+        if (!startOnBoard && !getIntent().hasExtra(BoardView.EXTRA_HOST)) visit(NavBarView.TERMINAL);
         if (startOnBoard || getIntent().hasExtra(BoardView.EXTRA_HOST)) showBoard(true);
         openBoardAgentFrom(getIntent());
         if (savedInstanceState == null) handleShare(getIntent());
@@ -227,10 +236,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         });
         terminal.setSearchListener(searchBar);
         backGesture = BackGesture.install(this, this::handleBack);
-        // Back always has somewhere to go inside the app (the board's own
-        // stack, the find bar, the terminal back to Home); only Home itself
-        // leaves, and handleBack does that explicitly.
-        backGesture.setEnabled(true);
+        updateBackGesture();
         searchButton = findViewById(R.id.search_button);
         searchButton.setOnClickListener(v -> {
             if (searchBar.isOpen()) hideSearch();
@@ -534,8 +540,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 showTerminal();
                 break;
             case NavBarView.ACTIVITY:
-                showBoard(true);
-                board.showTab("activity");
+                goTo(NavBarView.ACTIVITY);
                 break;
             case NavBarView.SETTINGS:
                 openSettings();
@@ -547,8 +552,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
 
     /** Home: the board's Agents screen at its root, from anywhere (a second tap pops sub-screens). */
     private void goHome() {
-        showBoard(true);
-        board.showTab("board");
+        goTo(NavBarView.HOME);
     }
 
     /** The terminal, opening a first tab when none is left. */
@@ -969,9 +973,11 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 }
 
                 @Override
-                public void boardNav(String tab, int needs, int unseen) {
+                public void boardNav(String tab, int needs, int unseen, boolean canBack) {
                     boardTab = "activity".equals(tab) ? NavBarView.ACTIVITY : NavBarView.HOME;
-                    if (boardVisible()) nav.setSelected(boardTab);
+                    boardCanBack = canBack;
+                    updateBackGesture();
+                    if (boardVisible()) visit(boardTab);
                     nav.setBadge(NavBarView.HOME, needs);
                     nav.setBadge(NavBarView.ACTIVITY, unseen);
                 }
@@ -988,7 +994,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         ensureBoard();
         findViewById(R.id.board_host).setVisibility(show ? View.VISIBLE : View.GONE);
         board.setVisible(show);
-        nav.setSelected(show ? boardTab : NavBarView.TERMINAL);
+        visit(show ? boardTab : NavBarView.TERMINAL);
+        updateBackGesture();
         if (show) {
             InputMethodManager imm = getSystemService(InputMethodManager.class);
             if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
@@ -1419,28 +1426,81 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     }
 
     /**
+     * Back stays inside the app while there is somewhere to go: the find bar,
+     * the terminal (back to Home), or the board's own stack. On Home itself
+     * the system takes it, with its predictive animation back to the launcher.
+     */
+    private void updateBackGesture() {
+        if (backGesture == null) return;
+        boolean onHome = boardVisible() && boardTab == NavBarView.HOME;
+        backGesture.setEnabled(!onHome || boardCanBack || places.size() > 1
+                || (searchBar != null && searchBar.isOpen()));
+    }
+
+    /** Marks {@code place} current: lit in the nav bar and moved to the top of the back history. */
+    private void visit(int place) {
+        nav.setSelected(place);
+        Integer top = places.peekFirst();
+        if (top == null || top != place) {
+            places.removeFirstOccurrence(place);
+            places.addFirst(place);
+            if (places.size() > 3) places.removeLast();
+        }
+        updateBackGesture();
+    }
+
+    /** Opens a place from the back history (or Home), without re-ordering it. */
+    private void goTo(int place) {
+        if (place == NavBarView.TERMINAL) {
+            showTerminal();
+        } else {
+            // Set before showing, so the board doesn't first light its old root.
+            boardTab = place;
+            showBoard(true);
+            board.showTab(place == NavBarView.ACTIVITY ? "activity" : "board");
+        }
+    }
+
+    /**
      * Back handling shared by {@code onBackPressed} and the predictive-back
      * callback: an open find bar closes first. Returns true when back was
      * consumed here rather than leaving the app.
      */
     private boolean handleBack() {
-        if (boardVisible()) {
-            board.back();
-            return true;
-        }
         if (searchBar != null && searchBar.isOpen()) {
             hideSearch();
             return true;
         }
-        // Home is the start destination: back from the terminal goes there,
-        // and back from Home leaves the app.
-        goHome();
+        if (boardVisible() && boardCanBack) {
+            board.back(this::backToPreviousPlace);
+            return true;
+        }
+        return backToPreviousPlace();
+    }
+
+    /**
+     * Back from a place itself: to the place before it, else to Home (the
+     * start), else — on Home with nowhere left — out of the app.
+     */
+    private boolean backToPreviousPlace() {
+        if (places.size() > 1) {
+            places.removeFirst();
+            goTo(places.peekFirst());
+            return true;
+        }
+        boolean onHome = boardVisible() && boardTab == NavBarView.HOME;
+        if (!onHome) {
+            places.clear();
+            goHome();
+            return true;
+        }
+        moveTaskToBack(true);
         return true;
     }
 
     /**
      * Gate in front of {@link #closeTab}: closing kills the shell
-     * irrecoverably (and closing the last tab exits the app), and with a
+     * irrecoverably (the last one lands on Home), and with a
      * close button on every pill a stray tap while scrolling the strip is
      * easy — so ask first, unless the user turned the guard off in Settings.
      */
@@ -1469,8 +1529,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         sessions.close(s);
         List<TerminalSession> remaining = sessions.sessions();
         if (remaining.isEmpty()) {
+            // Home is always there: the last tab closing (by hand, or an SSH
+            // tab whose connection ended) lands on it instead of closing the
+            // app. Terminal opens a fresh tab from there.
             SessionService.stop(this);
-            finishAndRemoveTask();
+            terminal.attachSession(null);
+            current = null;
+            updateTabs();
+            goHome();
             return;
         }
         SessionService.refresh(this); // reflect the new count in the notification
@@ -2053,13 +2119,13 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         // A userland session that exits before the user ever typed into it never
         // really came up: the rootfs was deleted out from under us, or bash is
         // unusable and the emulator bailed at launch. If it was the last tab, closing
-        // it would finish() the app — so the whole app vanishes on launch.
-        // Instead, drop to a plain shell so the user keeps a working terminal.
+        // it would leave no terminal at all, with no word why. Instead, drop to a
+        // plain shell so the user keeps a working terminal.
         boolean lastTab = sessions.sessions().size() == 1;
         // Same reasoning for a guest machine as for a userland session: one that
         // ends before the user ever typed into it never came up — the images are
         // unusable, or the machine died during boot — and letting that close the
-        // last tab would make the app vanish instead of showing anything.
+        // last tab would leave no terminal instead of showing anything.
         boolean startupFailure = (session.isUserland() || session.isVm())
                 && !session.userInteracted();
         if (lastTab && startupFailure) {

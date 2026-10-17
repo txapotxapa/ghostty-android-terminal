@@ -623,8 +623,24 @@ agent board, a WebView over the terminal UI), **Terminal**, **Activity**
 closes; the insets listener and a layout-pass check both drive that, since
 some window setups consume the insets first. The board page reports its root
 and badge counts over the bridge (`AshNative.nav`) the moment they change, not
-on the next animation frame, which a hidden WebView doesn't get. Back from the
-terminal goes Home; back from Home leaves the app.
+on the next animation frame, which a hidden WebView doesn't get.
+
+Back retraces the way you came, as in X or Instagram: a board sheet closes,
+then a sub-screen (an agent, New agent) pops; past that, `MainActivity` keeps
+a history of places (Home, Terminal, Activity — each once, most recent first,
+so it can't loop) and back goes to the previous one, else to Home, and only
+Home with nothing behind it leaves the app. The predictive-back callback is
+registered only while back stays in the app, so leaving keeps Android's own
+animation. Closing the last terminal tab (or an SSH tab whose connection
+ends) lands on Home instead of closing the app.
+
+An agent's Chat / Trace / Terminal tabs also switch by swiping sideways; the
+body follows the finger, mostly-vertical drags stay scrolls, blocks that can
+still scroll sideways keep their swipe, and the screen edges stay Android's
+back gesture. Messages sent while an agent is busy show in its chat at once
+("Sending…", then "Queued"), because Claude Code logs them as queue
+operations and `queued_command` attachments, not user messages, until it
+takes them in.
 
 Attachments (photos, screenshots, files) come from three places: the **+** on
 the left of every board composer (Camera / Photos / Files), the 📎 in the

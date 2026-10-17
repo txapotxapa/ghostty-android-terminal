@@ -65,9 +65,10 @@ final class BoardView {
         UserlandOptions boardUserlandOptions();
         /**
          * The page's place for the app's nav bar: its root ("board" or
-         * "activity"), agents waiting on you, and unseen "needs you" events.
+         * "activity"), agents waiting on you, unseen "needs you" events, and
+         * whether back has somewhere to go inside the board.
          */
-        void boardNav(String tab, int needs, int unseen);
+        void boardNav(String tab, int needs, int unseen, boolean canBack);
     }
 
     static final String EXTRA_HOST = "io.github.sylirre.terminal.board.HOST";
@@ -184,10 +185,10 @@ final class BoardView {
         js("ash.setVisible(" + v + ")");
     }
 
-    /** Back gesture while the board is up: the page pops its own stack, else the app goes to the background. */
-    void back() {
+    /** Back while the board is up: the page closes a sheet or pops a sub-screen, else {@code otherwise} runs. */
+    void back(Runnable otherwise) {
         web.evaluateJavascript("ash.back()", r -> {
-            if (!"true".equals(r)) activity.moveTaskToBack(true);
+            if (!"true".equals(r)) otherwise.run();
         });
     }
 
@@ -477,8 +478,8 @@ final class BoardView {
         }
 
         @JavascriptInterface
-        public void nav(String tab, int needs, int unseen) {
-            main.post(() -> host.boardNav(tab, needs, unseen));
+        public void nav(String tab, int needs, int unseen, boolean canBack) {
+            main.post(() -> host.boardNav(tab, needs, unseen, canBack));
         }
 
         @JavascriptInterface
