@@ -47,6 +47,8 @@ function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 function basename(p) { p = String(p || '').replace(/\/+$/, ''); return p.slice(p.lastIndexOf('/') + 1) || '/'; }
 
 const I = {
+  grow: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>',
+  shrink: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7"/></svg>',
   plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>',
   back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>',
   close: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -1650,8 +1652,30 @@ function syncSend(ta) {
   const go = box.querySelector('.round.go'), mic = box.querySelector('[data-act="mic"]');
   if (go) go.hidden = !has;
   if (mic) mic.hidden = has;
-  ta.style.height = 'auto'; ta.style.height = Math.min(128, ta.scrollHeight) + 'px';
+  sizeBox(ta, box);
 }
+
+// The message box, as in the Claude and ChatGPT apps: it grows with the text
+// up to about eight lines (less on a short screen), then scrolls. Past that an
+// expand button opens it to most of the screen above the keyboard; it closes
+// again by tapping it, or by itself once the text fits (e.g. after sending).
+function sizeBox(ta, box) {
+  const vh = window.innerHeight;
+  const cap = Math.round(Math.min(192, vh * 0.4)), big = Math.round(vh * 0.62);
+  ta.style.height = 'auto';
+  const need = ta.scrollHeight, over = need > cap + 4;
+  if (!over) box.classList.remove('big');
+  let t = box.querySelector('.grow');
+  if (over && !t) {
+    t = document.createElement('button');
+    t.className = 'grow'; t.dataset.act = 'grow';
+    (box.querySelector('.cin') || box).appendChild(t);
+  }
+  if (t) { t.hidden = !over; t.innerHTML = box.classList.contains('big') ? I.shrink : I.grow;
+    t.setAttribute('aria-label', box.classList.contains('big') ? 'Shrink message box' : 'Expand message box'); }
+  ta.style.height = (box.classList.contains('big') ? Math.max(big, cap) : Math.min(cap, need)) + 'px';
+}
+window.addEventListener('resize', () => { for (const ta of document.querySelectorAll('.composer textarea')) if (ta.value) syncSend(ta); });
 
 document.addEventListener('input', (e) => { if (e.target.matches('.composer textarea')) syncSend(e.target); });
 document.addEventListener('keydown', (e) => {
@@ -1765,6 +1789,10 @@ document.addEventListener('click', async (e) => {
       sendToAgent(g, t, items).then((st) => { toast(st === 'queued' ? 'Queued — it\'ll read it at its next step' : 'Sent'); kick(hosts.get(g.host)); setTimeout(() => loadDetail(g, false), 600); })
         .catch((x) => { ta.value = t; atts.steer = items; renderAtts('steer'); syncSend(ta); toast(x.message); });
       break;
+    }
+    case 'grow': {
+      const box = el.closest('.composer'), ta = box.querySelector('textarea');
+      box.classList.toggle('big'); haptic(); sizeBox(ta, box); ta.focus(); break;
     }
     case 'attach': haptic(); ui.sheet = { type: 'attach', target: el.dataset.target }; render(); break;
     case 'attach-how': { const target = ui.sheet?.target; closeSheet(); if (target) try { N.attach(target, el.dataset.how); } catch (x) { toast('Attachments aren\'t available'); } break; }

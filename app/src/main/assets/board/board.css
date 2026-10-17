@@ -204,8 +204,16 @@ svg { flex: none; }
 .banner i { width: 8px; height: 8px; border-radius: 4px; background: var(--coral); flex: none; animation: pulse 1.6s ease-in-out infinite; }
 .banner span { flex: 1; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .banner b { color: var(--coral-fg); font-size: 14px; font-weight: 500; }
-.composer { display: flex; align-items: flex-end; gap: 6px; background: var(--surface); border: 1px solid var(--edge); border-radius: 26px; padding: 6px; }
-.composer .cin { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-left: 4px; }
+.composer { position: relative; display: flex; align-items: flex-end; gap: 6px; background: var(--surface); border: 1px solid var(--edge); border-radius: 26px; padding: 6px; }
+.composer .cin { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-left: 4px; position: relative; }
+/* Expand/shrink for a long message: top-right of the text, clear of it. */
+.composer .grow { position: absolute; top: 4px; right: 0; width: 30px; height: 30px; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: var(--surface); }
+.composer .grow:active { background: var(--raised); }
+.composer .grow[hidden] { display: none; }
+.composer:has(.grow:not([hidden])) textarea { padding-right: 30px; }
+.composer.big { border-radius: 20px; }
+/* In the column of thumbnails + text the field must take the height it is given. */
+.composer .cin textarea { flex: none; width: 100%; }
 .composer.note { margin: 4px 0 6px; padding: 6px 6px 6px 12px; }
 .round.plus { background: transparent; color: var(--muted); }
 .round.plus:active { background: var(--raised); }
@@ -226,7 +234,7 @@ svg { flex: none; }
 .tiles button { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 8px 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--edge); font-size: 14px; color: var(--text); }
 .tiles button:active { background: var(--raised); }
 .menu button.muted { opacity: .55; }
-.composer textarea { flex: 1; background: none; border: 0; outline: 0; resize: none; min-height: 40px; max-height: 128px; padding: 9px 0; font-size: 15px; line-height: 1.45;
+.composer textarea { flex: 1; background: none; border: 0; outline: 0; resize: none; min-height: 40px; padding: 9px 0; font-size: 15px; line-height: 1.45;
   user-select: text; -webkit-user-select: text; }
 .composer textarea::placeholder { color: var(--faint); }
 .round { width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; flex: none; background: var(--raised); color: var(--text); }
