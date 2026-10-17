@@ -47,21 +47,12 @@ svg { flex: none; }
 /* ---- app frame: a view stack over a fixed bottom nav ---- */
 #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
 .view { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--ground); padding-top: var(--safe-top); }
-.view.with-nav { bottom: calc(68px + var(--safe-bottom)); }
 .view.enter { animation: slide-in .22s cubic-bezier(.2,.8,.2,1); }
 .view.enter-up { animation: rise-in .24s cubic-bezier(.2,.8,.2,1); }
 @keyframes slide-in { from { transform: translateX(28px); opacity: 0; } }
 @keyframes rise-in { from { transform: translateY(24px); opacity: 0; } }
 .scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .scroll::-webkit-scrollbar { display: none; }
-
-nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around;
-  padding: 8px 8px calc(10px + var(--safe-bottom)); border-top: 1px solid var(--line); background: var(--ground); z-index: 5; }
-nav.tabs button { min-width: 72px; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  font-size: 11px; color: var(--muted); position: relative; }
-nav.tabs button[aria-current="page"] { color: var(--text); }
-nav.tabs .dot { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
-  background: var(--coral); color: #1A0E0C; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
 
 /* ---- headers ---- */
 .top { padding: 22px 16px 12px; display: flex; flex-direction: column; gap: 6px; }

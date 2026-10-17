@@ -91,7 +91,13 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private static final int REQ_RESTORE = 101;
     private static final int REQ_SETTINGS = 102;
     private static final String STATE_BOARD = "board_visible";
+    // The board's fixed dark tokens (assets/board/board.css), for the nav bar under it.
     private static final int BOARD_GROUND = 0xFF121314;
+    private static final int BOARD_LINE = 0xFF26282C;
+    private static final int BOARD_RAISED = 0xFF222428;
+    private static final int BOARD_TEXT = 0xFFECECEA;
+    private static final int BOARD_MUTED = 0xFF9A9C9F;
+    private static final int BOARD_RIPPLE = 0x337FD1B9;
     private static final int REQ_ONBOARDING = 103;
     private static final String PREF_ASKED_BATTERY_OPT = "asked_ignore_battery_opt";
     private static final long BELL_VIBRATION_MS = 300;
@@ -105,6 +111,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private TextView promptPrevButton;
     private TextView promptNextButton;
     private View mainTopBar;
+    /** Bottom navigation under every main screen (Home / Terminal / Activity / Settings). */
+    private NavBarView nav;
     /** Active chrome palette, derived from the terminal theme (see applyChrome). */
     private ChromePalette chrome;
     private long lastClipToastUptime;
@@ -117,6 +125,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private AppSettings settings;
     /** The agent board over the terminal UI; created on first show. */
     private BoardView board;
+    /** The board's current root (HOME or ACTIVITY), lit in the nav bar while it is up. */
+    private int boardTab = NavBarView.HOME;
     private ThemeStore themeStore;
     private ExtraKeysConfig extraKeysConfig;
     private boolean forceShell;
@@ -182,10 +192,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         terminal.setMouseTracking(settings.mouseTracking());
         terminal.setTapToOpenLinks(settings.tapToOpenLinks());
         applyTextMargins();
-        findViewById(R.id.settings_button).setOnClickListener(this::openSettings);
-        Glyphs.applyTo(findViewById(R.id.settings_button));
-        findViewById(R.id.agents_button).setOnClickListener(v -> showBoard(true));
-        Glyphs.applyTo(findViewById(R.id.agents_button));
+        nav = findViewById(R.id.main_nav);
+        nav.setSelected(NavBarView.TERMINAL);
+        nav.setListener(this::onNavItem);
         boolean startOnBoard = savedInstanceState != null
                 ? savedInstanceState.getBoolean(STATE_BOARD, false)
                 : !forceShell && pendingSshLink == null && settings.boardOnLaunch()
@@ -205,6 +214,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         });
         terminal.setSearchListener(searchBar);
         backGesture = BackGesture.install(this, this::handleBack);
+        // Back always has somewhere to go inside the app (the board's own
+        // stack, the find bar, the terminal back to Home); only Home itself
+        // leaves, and handleBack does that explicitly.
+        backGesture.setEnabled(true);
         searchButton = findViewById(R.id.search_button);
         searchButton.setOnClickListener(v -> {
             if (searchBar.isOpen()) hideSearch();
@@ -430,25 +443,83 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         mainTopBar.setBackground(p.barSurface(true));
         styleTopBarButton(promptPrevButton);
         styleTopBarButton(promptNextButton);
-        styleTopBarButton(findViewById(R.id.settings_button));
         setSearchButtonActive(searchBar.isOpen());
+        applyNavColors();
         tabs.applyPalette(p);
         extraKeys.applyPalette(p);
         searchBar.applyPalette(p);
+        setLightSystemBars(p.isLight && !boardVisible());
+    }
+
+    /** Dark status/nav-bar icons (for a light surface behind them) or light ones. */
+    private void setLightSystemBars(boolean light) {
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
                 int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                         | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                controller.setSystemBarsAppearance(p.isLight ? mask : 0, mask);
+                controller.setSystemBarsAppearance(light ? mask : 0, mask);
             }
         } else {
             View decor = getWindow().getDecorView();
             int vis = decor.getSystemUiVisibility();
             int flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                     | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-            decor.setSystemUiVisibility(p.isLight ? vis | flags : vis & ~flags);
+            decor.setSystemUiVisibility(light ? vis | flags : vis & ~flags);
         }
+    }
+
+    /**
+     * The nav bar takes the colors of the screen above it: the board's fixed
+     * dark tokens, or the terminal theme's chrome (where it continues the
+     * extra-keys toolbar's surface).
+     */
+    private void applyNavColors() {
+        if (boardVisible()) {
+            android.graphics.drawable.LayerDrawable bg = new android.graphics.drawable.LayerDrawable(
+                    new android.graphics.drawable.ColorDrawable[]{
+                            new android.graphics.drawable.ColorDrawable(BOARD_GROUND),
+                            new android.graphics.drawable.ColorDrawable(BOARD_LINE)});
+            bg.setLayerHeight(1, Math.max(1, Math.round(getResources().getDisplayMetrics().density)));
+            bg.setLayerGravity(1, android.view.Gravity.TOP);
+            nav.applyColors(bg, BOARD_MUTED, BOARD_TEXT, BOARD_RAISED, BOARD_RIPPLE);
+        } else {
+            nav.applyColors(chrome.barSurface(false), chrome.textSecondary, chrome.textPrimary,
+                    chrome.surface3, chrome.accentTranslucent);
+        }
+    }
+
+    /** A nav bar tap. Home and Activity are the board's two roots; Settings is its own screen. */
+    private void onNavItem(int item) {
+        switch (item) {
+            case NavBarView.HOME:
+                goHome();
+                break;
+            case NavBarView.TERMINAL:
+                showTerminal();
+                break;
+            case NavBarView.ACTIVITY:
+                showBoard(true);
+                board.showTab("activity");
+                break;
+            case NavBarView.SETTINGS:
+                openSettings(null);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /** Home: the board's Agents screen at its root, from anywhere (a second tap pops sub-screens). */
+    private void goHome() {
+        showBoard(true);
+        board.showTab("board");
+    }
+
+    /** The terminal, opening a first tab when none is left. */
+    private void showTerminal() {
+        if (boardVisible()) showBoard(false);
+        if (sessions.isEmpty() && !awaitingOnboarding) createSession(userlandByDefault());
     }
 
     private void styleTopBarButton(TextView b) {
@@ -612,6 +683,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 public UserlandOptions boardUserlandOptions() {
                     return currentUserlandOptions(false);
                 }
+
+                @Override
+                public void boardNav(String tab, int needs, int unseen) {
+                    boardTab = "activity".equals(tab) ? NavBarView.ACTIVITY : NavBarView.HOME;
+                    if (boardVisible()) nav.setSelected(boardTab);
+                    nav.setBadge(NavBarView.HOME, needs);
+                    nav.setBadge(NavBarView.ACTIVITY, unseen);
+                }
             });
             android.widget.FrameLayout boardHost = findViewById(R.id.board_host);
             boardHost.addView(board.view(), new android.widget.FrameLayout.LayoutParams(
@@ -619,10 +698,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         }
         findViewById(R.id.board_host).setVisibility(show ? View.VISIBLE : View.GONE);
         board.setVisible(show);
+        nav.setSelected(show ? boardTab : NavBarView.TERMINAL);
         if (show) {
             InputMethodManager imm = getSystemService(InputMethodManager.class);
             if (imm != null) imm.hideSoftInputFromWindow(terminal.getWindowToken(), 0);
             findViewById(R.id.root).setBackgroundColor(BOARD_GROUND);
+            applyNavColors();
+            // The board is dark whatever the terminal theme: light system-bar icons.
+            setLightSystemBars(false);
         } else {
             applyTheme();
             terminal.requestFocus();
@@ -1005,7 +1088,6 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private void showSearch() {
         searchBar.show();
         setSearchButtonActive(true);
-        backGesture.setEnabled(true); // back closes the bar, not the app
     }
 
     /** Collapses the find bar and clears its match highlight. */
@@ -1013,7 +1095,6 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         boolean wasOpen = searchBar.isOpen();
         searchBar.hide();
         setSearchButtonActive(false);
-        backGesture.setEnabled(false);
         terminal.searchClose();
         // Always restore the keyboard when search was actually open; search
         // requires it and the user expects it back when dismissing the bar.
@@ -1057,8 +1138,13 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             board.back();
             return true;
         }
-        if (searchBar == null || !searchBar.isOpen()) return false;
-        hideSearch();
+        if (searchBar != null && searchBar.isOpen()) {
+            hideSearch();
+            return true;
+        }
+        // Home is the start destination: back from the terminal goes there,
+        // and back from Home leaves the app.
+        goHome();
         return true;
     }
 
@@ -1127,7 +1213,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         }
     }
 
-    /** Opens the dedicated settings screen from the gear button in the top bar. */
+    /** Opens the dedicated settings screen from the nav bar's Settings item. */
     private void openSettings(View ignored) {
         // SettingsActivity persists changes to the stores; onResume re-applies
         // them. Backup/restore are terminal-coupled, so it hands those back as an

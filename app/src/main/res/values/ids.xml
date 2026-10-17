@@ -4,4 +4,10 @@
 <resources>
     <item type="id" name="extra_keys_done" />
     <item type="id" name="extra_keys_reset" />
+    <!-- Bottom navigation items (NavBarView); settings_button keeps the id
+         the gear had in the old top bar. -->
+    <item type="id" name="nav_home" />
+    <item type="id" name="nav_terminal" />
+    <item type="id" name="nav_activity" />
+    <item type="id" name="settings_button" />
 </resources>

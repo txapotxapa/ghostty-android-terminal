@@ -60,6 +60,11 @@ final class BoardView {
         void boardScanQr();
         void boardPastePairing();
         UserlandOptions boardUserlandOptions();
+        /**
+         * The page's place for the app's nav bar: its root ("board" or
+         * "activity"), agents waiting on you, and unseen "needs you" events.
+         */
+        void boardNav(String tab, int needs, int unseen);
     }
 
     static final String EXTRA_HOST = "io.github.sylirre.terminal.board.HOST";
@@ -165,6 +170,11 @@ final class BoardView {
         web.evaluateJavascript("ash.back()", r -> {
             if (!"true".equals(r)) activity.moveTaskToBack(true);
         });
+    }
+
+    /** The nav bar picked a board root ("board" or "activity"): it opens at the top, sheets closed. */
+    void showTab(String tab) {
+        js("ash.tab(" + q(tab) + ")");
     }
 
     void openAgent(String h, String pane) {
@@ -342,6 +352,11 @@ final class BoardView {
         @JavascriptInterface
         public void showShell() {
             main.post(host::boardShowShell);
+        }
+
+        @JavascriptInterface
+        public void nav(String tab, int needs, int unseen) {
+            main.post(() -> host.boardNav(tab, needs, unseen));
         }
 
         @JavascriptInterface

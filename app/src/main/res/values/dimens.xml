@@ -67,6 +67,17 @@
     <dimen name="top_bar_height">56dp</dimen>
     <dimen name="elevation_bar">3dp</dimen>
 
+    <!-- Bottom navigation (NavBarView): the current item's icon sits in an
+         indicator pill, its label underneath; a count badge rides the pill. -->
+    <dimen name="nav_pad_v">6dp</dimen>
+    <dimen name="nav_icon">22dp</dimen>
+    <dimen name="nav_indicator_w">56dp</dimen>
+    <dimen name="nav_indicator_h">28dp</dimen>
+    <dimen name="nav_label_gap">2dp</dimen>
+    <dimen name="nav_badge">16dp</dimen>
+    <dimen name="text_nav">11sp</dimen>
+    <dimen name="text_nav_badge">10sp</dimen>
+
     <!-- Slider value read-out reserve, so digits don't jiggle the bar. -->
     <dimen name="slider_readout_min">52dp</dimen>
     <!-- Themed terminal scrollbar thumb width. -->

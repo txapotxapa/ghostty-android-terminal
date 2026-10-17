@@ -48,4 +48,7 @@
     <color name="onb_omarchy_ink">#7AA2F7</color>
     <color name="onb_debian_tile">#2EE04A6F</color>
     <color name="onb_debian_ink">#FF7D9C</color>
+    <!-- Bottom-navigation count badges (agents waiting on you): the board's coral. -->
+    <color name="nav_badge">#FFF07A6A</color>
+    <color name="nav_badge_ink">#FF1A0E0C</color>
 </resources>

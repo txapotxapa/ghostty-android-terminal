@@ -9,8 +9,6 @@
     <string name="top_bar_back_description">Back</string>
 
     <!-- Settings button in the top bar -->
-    <string name="settings_button_icon">⚙</string>
-    <string name="settings_button_description">Settings</string>
 
     <!-- Search (find) bar in the top bar -->
     <string name="search_button_icon">🔍</string>
@@ -190,7 +188,6 @@
     <string name="setting_notify_mutes_summary">Agents muted under [ui.sound.agents] in herdr\'s config stay quiet here too (droid is muted by default)</string>
     <string name="board_channel_done_name">Agents finishing</string>
     <string name="board_channel_done_description">An agent on one of your computers finished its turn</string>
-    <string name="agents_button_icon" translatable="false">⊞</string>
     <string name="agents_button_description">Agent board</string>
     <string name="board_channel_name">Agents needing you</string>
     <string name="board_channel_description">An agent on one of your computers is waiting for an answer or approval</string>
@@ -590,4 +587,10 @@
         <item>bksp</item>
         <item>ins</item>
     </string-array>
+    <!-- Bottom navigation (NavBarView). -->
+    <string name="nav_home">Home</string>
+    <string name="nav_terminal">Terminal</string>
+    <string name="nav_activity">Activity</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_badge_description">%1$s, %2$d waiting</string>
 </resources>

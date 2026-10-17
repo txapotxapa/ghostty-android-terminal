@@ -185,13 +185,14 @@ window.ash = {
   },
   onDictation(id, text) { const f = dictations.get(id); if (f) { dictations.delete(id); f(text || ''); } },
   updateChanged() { render(); },
-  setVisible(v) { ui.visible = !!v; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (v) { render(); for (const h of hosts.values()) if (h.state === 'online') kick(h); } },
+  setVisible(v) { ui.visible = !!v; if (v && ui.tab === 'activity') unseenNeeds = 0; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (v) { render(); for (const h of hosts.values()) if (h.state === 'online') kick(h); } },
   setInsets(top, bottom) {
     document.documentElement.style.setProperty('--safe-top', top + 'px');
     document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
   },
   hostsChanged() { loadHosts(); render(); },
   back() { return goBack(); },
+  tab(t) { if (ui.sheet) closeSheet(); setTab(t); },
   openAgent(host, pane) { ui.sheet = null; ui.stack = [{ v: 'board' }]; ui.tab = 'board'; openDetail(host + '|' + pane); },
 };
 
@@ -682,7 +683,7 @@ function logEvent(ev) {
   activity.unshift(ev);
   if (activity.length > 300) activity.length = 300;
   try { localStorage.setItem(ACT_KEY, JSON.stringify(activity)); } catch (e) {}
-  if (ev.type === 'blocked' && ui.tab !== 'activity') unseenNeeds++;
+  if (ev.type === 'blocked' && (ui.tab !== 'activity' || !ui.visible)) unseenNeeds++;
   return ev;
 }
 
@@ -729,6 +730,9 @@ function openDetail(key) {
 
 let renderQueued = false;
 function render() {
+  // Straight away, not on the next frame: the badges matter most while the
+  // board is hidden behind the terminal, where frames don't come.
+  pushNav();
   if (renderQueued) return;
   renderQueued = true;
   requestAnimationFrame(() => { renderQueued = false; renderNow(); });
@@ -741,15 +745,13 @@ function renderNow() {
     : v.v === 'activity' ? viewActivity() : v.v === 'computers' ? viewComputers() : '';
   const id = v.v + (v.key || '');
   let el = app.firstElementChild;
-  const nav = v.v === 'board' || v.v === 'activity';
   if (!el || el.dataset.id !== id) {
-    app.innerHTML = `<section class="view${nav ? ' with-nav' : ''}${ui.anim ? ' ' + ui.anim : ''}" data-id="${esc(id)}"></section>`;
+    app.innerHTML = `<section class="view${ui.anim ? ' ' + ui.anim : ''}" data-id="${esc(id)}"></section>`;
     el = app.firstElementChild; ui.anim = null;
     morph(el, html, true);
   } else {
     morph(el, html, false);
   }
-  renderNav(nav);
   renderSheet();
 }
 
@@ -769,14 +771,15 @@ function morph(el, html, fresh) {
   }
 }
 
-function renderNav(show) {
-  const nav = $('#tabs');
-  if (!show) { nav.style.display = 'none'; return; }
-  nav.style.display = '';
+// The nav bar is native (NavBarView, under the board and the terminal
+// alike); the page reports its root and badge counts whenever they change.
+let navSent = '';
+function pushNav() {
   const needs = [...agents.values()].filter((g) => g.status === 'blocked' && !g.gone).length;
-  const b = (t, icon, label, dot) => `<button data-act="tab" data-t="${t}" ${ui.tab === t ? 'aria-current="page"' : ''}>${icon}${label}${dot ? `<span class="dot">${dot}</span>` : ''}</button>`;
-  const html = b('board', I.grid, 'Agents', needs || '') + b('shell', I.shell, 'Shell', '') + b('activity', I.list, 'Activity', unseenNeeds || '');
-  if (nav.innerHTML !== html) nav.innerHTML = html;
+  const s = ui.tab + '|' + needs + '|' + unseenNeeds;
+  if (s === navSent) return;
+  navSent = s;
+  try { N.nav(ui.tab, needs, unseenNeeds); } catch (e) {}
 }
 
 // ---- board
