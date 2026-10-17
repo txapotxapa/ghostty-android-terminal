@@ -99,6 +99,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private static final int BOARD_MUTED = 0xFF9A9C9F;
     private static final int BOARD_RIPPLE = 0x337FD1B9;
     private static final int REQ_ONBOARDING = 103;
+    /** Photos / Files picked for an attachment (the composer's + or the terminal's 📎). */
+    private static final int REQ_ATTACH = 104;
+    /** A photo taken with the camera for an attachment. */
+    private static final int REQ_CAPTURE = 105;
     private static final String PREF_ASKED_BATTERY_OPT = "asked_ignore_battery_opt";
     private static final long BELL_VIBRATION_MS = 300;
     private static final long BELL_THROTTLE_MS = BELL_VIBRATION_MS;
@@ -127,6 +131,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private BoardView board;
     /** The board's current root (HOME or ACTIVITY), lit in the nav bar while it is up. */
     private int boardTab = NavBarView.HOME;
+    /** The paired computer each terminal tab is on, where known (opened from the board or a pairing). */
+    private final java.util.Map<TerminalSession, String> tabHosts = new java.util.WeakHashMap<>();
+    /** Who gets the next picked/captured attachments. */
+    private java.util.function.Consumer<List<Attachments.Item>> pendingAttach;
+    /** The camera's output file while it is open. */
+    private java.io.File pendingCapture;
+    private final java.util.concurrent.ExecutorService attachWork =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
     private ThemeStore themeStore;
     private ExtraKeysConfig extraKeysConfig;
     private boolean forceShell;
@@ -202,6 +214,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                         && !SshLinks.savedHosts(this).isEmpty();
         if (startOnBoard || getIntent().hasExtra(BoardView.EXTRA_HOST)) showBoard(true);
         openBoardAgentFrom(getIntent());
+        if (savedInstanceState == null) handleShare(getIntent());
 
         searchBar = findViewById(R.id.search_bar);
         searchBar.setListener(new SearchBarView.Listener() {
@@ -224,6 +237,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             else showSearch();
         });
         Glyphs.applyTo(searchButton);
+        TextView attachButton = findViewById(R.id.attach_button);
+        attachButton.setOnClickListener(v -> showTerminalAttachMenu());
+        Glyphs.applyTo(attachButton);
 
         promptPrevButton = findViewById(R.id.prompt_prev_button);
         promptNextButton = findViewById(R.id.prompt_next_button);
@@ -351,6 +367,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (handleShare(intent)) return;
         if (intent.hasExtra(BoardView.EXTRA_HOST)) {
             showBoard(true);
             openBoardAgentFrom(intent);
@@ -413,6 +430,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     protected void onDestroy() {
         super.onDestroy();
         SessionService.clearExitListener(onServiceExit);
+        attachWork.shutdownNow();
         if (board != null) {
             board.destroy();
             board = null;
@@ -459,6 +477,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         mainTopBar.setBackground(p.barSurface(true));
         styleTopBarButton(promptPrevButton);
         styleTopBarButton(promptNextButton);
+        styleTopBarButton(findViewById(R.id.attach_button));
         setSearchButtonActive(searchBar.isOpen());
         applyNavColors();
         tabs.applyPalette(p);
@@ -519,7 +538,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 board.showTab("activity");
                 break;
             case NavBarView.SETTINGS:
-                openSettings(null);
+                openSettings();
                 break;
             default:
                 break;
@@ -658,7 +677,245 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         createSession(true);
         if (current != null && current.isUserland()) {
             current.write(SshLinks.connectCommand(name));
+            tabHosts.put(current, name);
         }
+    }
+
+    // --- attachments ---------------------------------------------------------
+    //
+    // Photos, screenshots and files for an agent or a terminal tab: picked with
+    // the composer's + (board) or the 📎 in the terminal's top bar, or shared
+    // into the app from anywhere. Prepared by Attachments, uploaded over the
+    // board's link to the computer (BoardView.upload), or saved into the
+    // phone's own Linux for a local tab.
+
+    /** Opens the camera, the photo picker or the file picker; {@code done} gets the prepared items. */
+    private void pickAttachments(String how, java.util.function.Consumer<List<Attachments.Item>> done) {
+        pendingAttach = done;
+        try {
+            if (Attachments.CAMERA.equals(how)) {
+                pendingCapture = Attachments.captureFile(this);
+                startActivityForResult(Attachments.cameraIntent(
+                        CaptureProvider.uriFor(this, pendingCapture)), REQ_CAPTURE);
+            } else if (Attachments.FILES.equals(how)) {
+                startActivityForResult(Attachments.filesIntent(), REQ_ATTACH);
+            } else {
+                try {
+                    startActivityForResult(Attachments.photosIntent(), REQ_ATTACH);
+                } catch (android.content.ActivityNotFoundException e) {
+                    startActivityForResult(Attachments.galleryIntent(), REQ_ATTACH);
+                }
+            }
+        } catch (android.content.ActivityNotFoundException e) {
+            pendingAttach = null;
+            Toast.makeText(this, Attachments.CAMERA.equals(how) ? getString(R.string.attach_no_camera)
+                    : getString(R.string.attach_failed, e.getMessage()), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void onAttachResult(int requestCode, int resultCode, Intent data) {
+        java.util.function.Consumer<List<Attachments.Item>> done = pendingAttach;
+        pendingAttach = null;
+        List<Uri> uris = new ArrayList<>();
+        if (resultCode == RESULT_OK) {
+            if (requestCode == REQ_CAPTURE) {
+                if (pendingCapture != null && pendingCapture.length() > 0) {
+                    uris.add(CaptureProvider.uriFor(this, pendingCapture));
+                }
+            } else {
+                uris = Attachments.uris(data);
+            }
+        }
+        pendingCapture = null;
+        if (done == null || uris.isEmpty()) return;
+        prepareAttachments(uris, done);
+    }
+
+    /** Reads and shrinks {@code uris} off the main thread, then hands the items back on it. */
+    private void prepareAttachments(List<Uri> uris, java.util.function.Consumer<List<Attachments.Item>> done) {
+        attachWork.execute(() -> {
+            List<Attachments.Item> items = new ArrayList<>();
+            String error = null;
+            for (Uri u : uris) {
+                try {
+                    items.add(Attachments.prepare(this, u));
+                } catch (IOException | RuntimeException e) {
+                    error = e.getMessage();
+                }
+            }
+            final String err = error;
+            runOnUiThread(() -> {
+                if (err != null) {
+                    Toast.makeText(this, getString(R.string.attach_failed, err), Toast.LENGTH_LONG).show();
+                }
+                if (!items.isEmpty()) done.accept(items);
+            });
+        });
+    }
+
+    /** The 📎 in the terminal's top bar: Camera / Photos / Files, then into the current tab. */
+    private void showTerminalAttachMenu() {
+        if (current == null) {
+            Toast.makeText(this, R.string.attach_needs_tab, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] how = {Attachments.CAMERA, Attachments.PHOTOS, Attachments.FILES};
+        String[] labels = {getString(R.string.attach_camera), getString(R.string.attach_photos),
+                getString(R.string.attach_files)};
+        TerminalSession target = current;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.attach_title)
+                .setItems(labels, (d, which) -> pickAttachments(how[which], items -> sendToTab(target, items)))
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
+    }
+
+    /**
+     * Puts {@code items} where tab {@code s} can read them and pastes their
+     * paths at its prompt: on its computer when the tab is on one (asked once
+     * per tab when it isn't known), else in the phone's own Linux.
+     */
+    private void sendToTab(TerminalSession s, List<Attachments.Item> items) {
+        if (items.isEmpty()) return;
+        String known = tabHosts.get(s);
+        List<String> paired = SshLinks.savedHosts(this);
+        if (known != null && paired.contains(known)) {
+            uploadToTab(s, known, items);
+            return;
+        }
+        if (paired.isEmpty() || !UserlandRootfs.isInstalled(this)) {
+            saveLocallyForTab(s, items);
+            return;
+        }
+        List<String> labels = new ArrayList<>(paired);
+        labels.add(getString(R.string.attach_where_phone));
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.attach_where_title)
+                .setItems(labels.toArray(new String[0]), (d, which) -> {
+                    if (which < paired.size()) {
+                        tabHosts.put(s, paired.get(which));
+                        uploadToTab(s, paired.get(which), items);
+                    } else {
+                        saveLocallyForTab(s, items);
+                    }
+                })
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
+    }
+
+    private void uploadToTab(TerminalSession s, String host, List<Attachments.Item> items) {
+        ensureBoard();
+        Toast.makeText(this, getString(R.string.attach_uploading, host), Toast.LENGTH_SHORT).show();
+        List<String> paths = new ArrayList<>();
+        uploadNext(s, host, items, 0, paths);
+    }
+
+    private void uploadNext(TerminalSession s, String host, List<Attachments.Item> items, int i,
+            List<String> paths) {
+        if (i == items.size()) {
+            pasteIntoTab(s, paths);
+            return;
+        }
+        board.upload(host, items.get(i), (path, err) -> {
+            if (path == null) {
+                Toast.makeText(this, getString(R.string.attach_failed, err), Toast.LENGTH_LONG).show();
+                if (!paths.isEmpty()) pasteIntoTab(s, paths);
+                return;
+            }
+            Attachments.drop(items.get(i).token);
+            paths.add(path);
+            uploadNext(s, host, items, i + 1, paths);
+        });
+    }
+
+    /** A tab on this phone: the files go to the inbox in its Linux home (or the app's files for plain sh). */
+    private void saveLocallyForTab(TerminalSession s, List<Attachments.Item> items) {
+        attachWork.execute(() -> {
+            List<String> paths = new ArrayList<>();
+            String error = null;
+            for (Attachments.Item it : items) {
+                try {
+                    java.io.File dir;
+                    String guest;
+                    if (s.isUserland() && UserlandRootfs.isInstalled(this)) {
+                        String home = settings.userlandHome();
+                        home = home == null || home.trim().isEmpty() ? "/root" : home.trim();
+                        guest = home + "/.cache/a-sh/inbox";
+                        dir = new java.io.File(UserlandRootfs.dir(this), guest.substring(1));
+                    } else {
+                        dir = new java.io.File(getFilesDir(), "inbox");
+                        guest = dir.getAbsolutePath();
+                    }
+                    if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("can't create " + guest);
+                    try (java.io.FileOutputStream out = new java.io.FileOutputStream(new java.io.File(dir, it.name))) {
+                        out.write(it.data);
+                    }
+                    Attachments.drop(it.token);
+                    paths.add(guest + "/" + it.name);
+                } catch (IOException e) {
+                    error = e.getMessage();
+                }
+            }
+            final String err = error;
+            runOnUiThread(() -> {
+                if (err != null) {
+                    Toast.makeText(this, getString(R.string.attach_failed, err), Toast.LENGTH_LONG).show();
+                }
+                pasteIntoTab(s, paths);
+            });
+        });
+    }
+
+    /** Pastes the paths at the tab's cursor (bracketed when the app asked), so agents attach them. */
+    private void pasteIntoTab(TerminalSession s, List<String> paths) {
+        if (paths.isEmpty() || !sessions.sessions().contains(s)) return;
+        byte[] bytes = s.emulator.encodePaste(String.join(" ", paths) + " ");
+        if (bytes == null) return;
+        if (current != s) switchTo(s);
+        s.writeBytes(bytes);
+        Toast.makeText(this, getString(R.string.attach_pasted, paths.size()), Toast.LENGTH_SHORT).show();
+        if (settings.touchKeyboard() && !boardVisible()) showKeyboard();
+    }
+
+    /**
+     * Something shared into the app (a screenshot, photos, a file): prepared,
+     * then the board asks where it goes — an agent or a terminal tab.
+     */
+    private boolean handleShare(Intent intent) {
+        String action = intent.getAction();
+        if (!Intent.ACTION_SEND.equals(action) && !Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            return false;
+        }
+        List<Uri> uris = Attachments.uris(intent);
+        CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        String note = text == null ? "" : text.toString();
+        intent.setAction(Intent.ACTION_MAIN); // a recreate mustn't share it again
+        if (uris.isEmpty() && note.isEmpty()) return true;
+        java.util.function.Consumer<List<Attachments.Item>> show = items -> {
+            showBoard(true);
+            board.share(items, tabsJson(), note);
+        };
+        if (uris.isEmpty()) show.accept(new ArrayList<>());
+        else prepareAttachments(uris, show);
+        return true;
+    }
+
+    /** Open terminal tabs for the share sheet: index, title and computer (if known). */
+    private org.json.JSONArray tabsJson() {
+        org.json.JSONArray a = new org.json.JSONArray();
+        List<TerminalSession> all = sessions.sessions();
+        for (int i = 0; i < all.size(); i++) {
+            org.json.JSONObject o = new org.json.JSONObject();
+            try {
+                o.put("index", i);
+                o.put("title", tabTitle(all.get(i), i));
+                String h = tabHosts.get(all.get(i));
+                o.put("host", h == null ? "" : h);
+            } catch (org.json.JSONException ignored) {
+            }
+            a.put(o);
+        }
+        return a;
     }
 
     // --- agent board ---------------------------------------------------------
@@ -667,22 +924,33 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         return board != null && board.isVisible();
     }
 
-    /** Shows the agent board over the terminal UI, or goes back to the terminal. */
-    private void showBoard(boolean show) {
-        if (!show && board == null) return;
+    /** Creates the board (hidden) if it isn't yet: its links also carry uploads for terminal tabs. */
+    private void ensureBoard() {
         if (board == null) {
             board = new BoardView(this, new BoardView.Host() {
                 @Override
-                public void boardShowShell() {
+                public void boardOpenTab(String host, String command) {
                     showBoard(false);
-                    if (sessions.isEmpty()) createSession(userlandByDefault());
+                    createSession(true);
+                    if (current != null && current.isUserland()) {
+                        current.write(command + "\r");
+                        tabHosts.put(current, host);
+                    }
                 }
 
                 @Override
-                public void boardOpenTab(String command) {
+                public void boardAttach(String how,
+                        java.util.function.Consumer<List<Attachments.Item>> done) {
+                    pickAttachments(how, done);
+                }
+
+                @Override
+                public void boardShareToTab(int index, List<Attachments.Item> items) {
+                    List<TerminalSession> all = sessions.sessions();
+                    if (index < 0 || index >= all.size()) return;
                     showBoard(false);
-                    createSession(true);
-                    if (current != null && current.isUserland()) current.write(command + "\r");
+                    switchTo(all.get(index));
+                    sendToTab(all.get(index), items);
                 }
 
                 @Override
@@ -712,6 +980,12 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             boardHost.addView(board.view(), new android.widget.FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
+    }
+
+    /** Shows the agent board over the terminal UI, or goes back to the terminal. */
+    private void showBoard(boolean show) {
+        if (!show && board == null) return;
+        ensureBoard();
         findViewById(R.id.board_host).setVisibility(show ? View.VISIBLE : View.GONE);
         board.setVisible(show);
         nav.setSelected(show ? boardTab : NavBarView.TERMINAL);
@@ -1230,7 +1504,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     }
 
     /** Opens the dedicated settings screen from the nav bar's Settings item. */
-    private void openSettings(View ignored) {
+    private void openSettings() {
         // SettingsActivity persists changes to the stores; onResume re-applies
         // them. Backup/restore are terminal-coupled, so it hands those back as an
         // activity result rather than running them itself.
@@ -1299,6 +1573,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == BoardView.REQ_DICTATE) {
             if (board != null) board.onDictation(resultCode, data);
+            return;
+        }
+        if (requestCode == REQ_ATTACH || requestCode == REQ_CAPTURE) {
+            onAttachResult(requestCode, resultCode, data);
             return;
         }
         if (requestCode == REQ_ONBOARDING) {

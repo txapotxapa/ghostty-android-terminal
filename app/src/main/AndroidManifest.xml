@@ -48,7 +48,23 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="ash" android:host="ssh" />
             </intent-filter>
+            <!-- Share a screenshot (or any file) to an agent or a terminal tab. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="application/*" />
+            </intent-filter>
         </activity>
+
+        <!-- The file the camera writes a photo into (composer + → Camera). -->
+        <provider
+            android:name=".ui.CaptureProvider"
+            android:authorities="${applicationId}.capture"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <!-- First-run intro & userland setup wizard, launched by MainActivity
              for the first session and again (setup-only mode) on demand. -->
@@ -59,7 +75,7 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|density|uiMode"
             android:windowSoftInputMode="adjustResize|stateAlwaysHidden" />
 
-        <!-- App settings screen, launched from the top-bar gear. -->
+        <!-- App settings screen, launched from the nav bar's Settings item. -->
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"

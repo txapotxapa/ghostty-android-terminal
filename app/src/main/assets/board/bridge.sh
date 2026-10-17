@@ -9,7 +9,8 @@
 #
 # Verbs are a fixed list: herdr API calls, plus a few read-only helpers the
 # board needs (installed agent CLIs, git repos for the folder picker, an
-# agent's session log for its chat and trace views).
+# agent's session log for its chat and trace views), and put/put-end, which
+# land images sent from the phone in ~/.cache/a-sh/inbox for agents to read.
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.opencode/bin:$HOME/.npm-global/bin:/usr/local/bin:$PATH"
 export LC_ALL=C.UTF-8 2>/dev/null
 
@@ -178,6 +179,31 @@ mutes() {
 	awk '/^\[/{sec=$0; next} sec=="[ui.sound]" && /^ *enabled *=/{gsub(/[ "]/,""); print "*" substr($0, index($0,"="))}' "$cfg"
 }
 
+# Images from the phone (screenshots for an agent), in base64 chunks of one
+# request each: put NAME SEQ DATA appends (SEQ 0 starts over), put-end NAME
+# BYTES checks the size, publishes the file and prints its path. Names are
+# plain file names; files older than a week are pruned.
+INBOX="$HOME/.cache/a-sh/inbox"
+put_name_ok() { case $1 in ''|.*|*[!A-Za-z0-9._-]*) return 1 ;; esac; [ ${#1} -le 80 ]; }
+put() {
+	local name=$1 seq=$2 data=$3
+	put_name_ok "$name" || { echo "bad name"; return 2; }
+	case $seq in ''|*[!0-9]*) echo "bad seq"; return 2 ;; esac
+	mkdir -p "$INBOX" && chmod 700 "$INBOX" 2>/dev/null
+	[ "$seq" = 0 ] && : >"$INBOX/.$name.part"
+	printf '%s' "$data" | base64 -d >>"$INBOX/.$name.part" 2>/dev/null || { echo "decode failed"; return 1; }
+	stat -c %s "$INBOX/.$name.part"
+}
+put_end() {
+	local name=$1 bytes=$2 have
+	put_name_ok "$name" || { echo "bad name"; return 2; }
+	have=$(stat -c %s "$INBOX/.$name.part" 2>/dev/null || echo -1)
+	[ "$have" = "$bytes" ] || { rm -f "$INBOX/.$name.part"; echo "got $have of $bytes bytes"; return 1; }
+	mv -f "$INBOX/.$name.part" "$INBOX/$name" || return 1
+	find "$INBOX" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null
+	printf '%s' "$INBOX/$name"
+}
+
 if ! command -v herdr >/dev/null 2>&1; then
 	echo "@@E noherdr"
 	exit 3
@@ -190,6 +216,14 @@ while IFS= read -r line; do
 	[ "$rest" = "$line" ] && rest=
 	args=()
 	IFS=$'\t' read -ra parts <<<"$rest"
+	# put carries its payload as plain base64: decoding it into a shell
+	# variable would mangle binary data, so it goes straight to the file.
+	if [ "${parts[0]-}" = "x$(printf put | b64)" ]; then
+		d() { printf '%s' "${1#x}" | base64 -d 2>/dev/null; }
+		out=$(put "$(d "${parts[1]-}")" "$(d "${parts[2]-}")" "${parts[3]#x}")
+		reply "$id" "$?" "$out"
+		continue
+	fi
 	for p in "${parts[@]}"; do
 		args+=("$(printf '%s' "${p#x}" | base64 -d 2>/dev/null)")
 	done
@@ -226,6 +260,10 @@ while IFS= read -r line; do
 		;;
 	install-prep)
 		out=$(install_prep "${args[0]-}")
+		rc=$?
+		;;
+	put-end)
+		out=$(put_end "${args[0]-}" "${args[1]-}")
 		rc=$?
 		;;
 	mutes)

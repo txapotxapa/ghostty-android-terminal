@@ -593,4 +593,18 @@
     <string name="nav_activity">Activity</string>
     <string name="nav_settings">Settings</string>
     <string name="nav_badge_description">%1$s, %2$d waiting</string>
+    <!-- Attachments: the composer's + / the terminal's 📎, and shares into the app. -->
+    <string name="attach_button_icon" translatable="false">📎</string>
+    <string name="attach_button_description">Attach a photo or file</string>
+    <string name="attach_title">Add to the conversation</string>
+    <string name="attach_camera">Camera</string>
+    <string name="attach_photos">Photos</string>
+    <string name="attach_files">Files</string>
+    <string name="attach_where_title">Send to which computer?</string>
+    <string name="attach_where_phone">This phone</string>
+    <string name="attach_no_camera">No camera app found</string>
+    <string name="attach_failed">Couldn\'t attach: %1$s</string>
+    <string name="attach_uploading">Sending to %1$s…</string>
+    <string name="attach_pasted">Pasted %1$d path(s)</string>
+    <string name="attach_needs_tab">Open a terminal tab first</string>
 </resources>

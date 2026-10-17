@@ -48,9 +48,6 @@ function basename(p) { p = String(p || '').replace(/\/+$/, ''); return p.slice(p
 
 const I = {
   plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>',
-  grid: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
-  shell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8l4 4-4 4M12 17h7"/></svg>',
-  list: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
   back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>',
   close: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
@@ -61,6 +58,9 @@ const I = {
   qr: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8"/></svg>',
   term: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>',
   trash: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  camera: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  photo: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>',
+  file: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>',
   check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg>',
   refresh: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
   link: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
@@ -192,6 +192,20 @@ window.ash = {
   },
   hostsChanged() { loadHosts(); render(); },
   back() { return goBack(); },
+  onAttached(target, list) {
+    atts[target] = (atts[target] || []).concat(list || []);
+    renderAtts(target);
+    const ta = document.getElementById(target); if (ta) { syncSend(ta); }
+  },
+  onUploaded(id, path, err) {
+    const p = uploads.get(id); if (!p) return;
+    uploads.delete(id);
+    if (path) p.resolve(path); else p.reject(new Error(err || 'upload failed'));
+  },
+  share(items, tabs, note) {
+    ui.sheet = { type: 'share', items: items || [], tabs: tabs || [], note: note || '' };
+    render();
+  },
   tab(t) { if (ui.sheet) closeSheet(); setTab(t); },
   openAgent(host, pane) { ui.sheet = null; ui.stack = [{ v: 'board' }]; ui.tab = 'board'; openDetail(host + '|' + pane); },
 };
@@ -703,6 +717,55 @@ function dictate(cb) {
   try { N.dictate(id); } catch (e) { dictations.delete(id); toast('Voice input isn\'t available'); }
 }
 
+// ------------------------------------------------------------- attachments
+//
+// Photos, screenshots and files for an agent: the composer's + opens Camera /
+// Photos / Files (native pickers), the picks come back as thumbnails above the
+// text, and sending uploads each to ~/.cache/a-sh/inbox on the agent's
+// computer and puts the paths in the prompt, where the agent reads them.
+
+const atts = {};            // composer textarea id -> [{token, name, image, thumb}]
+const uploads = new Map();  // request id -> {resolve, reject}
+let upSeq = 0;
+
+// One thumbnail: the image, or a file icon with its name; removable in a composer.
+function attHtml(a, target) {
+  const face = a.thumb ? `<img src="${a.thumb}" alt="">`
+    : `<div class="fn">${I.file}<span>${esc(a.name.replace(/^\d{8}-\d{6}-\d+-/, ''))}</span></div>`;
+  const x = target ? `<button data-act="att-x" data-target="${esc(target)}" data-token="${esc(a.token)}" aria-label="Remove">${I.close}</button>` : '';
+  return `<div class="att">${face}${x}</div>`;
+}
+function renderAtts(target) {
+  const el = document.getElementById('atts-' + target); if (!el) return;
+  const html = (atts[target] || []).map((a) => attHtml(a, target)).join('');
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+function clearAtts(target, drop) {
+  for (const a of atts[target] || []) if (drop) try { N.dropAttachment(a.token); } catch (e) {}
+  atts[target] = [];
+  renderAtts(target);
+}
+function uploadAtt(host, token) {
+  return new Promise((resolve, reject) => {
+    const id = 'j' + (++upSeq);
+    uploads.set(id, { resolve, reject });
+    try { N.upload(host, token, id); } catch (e) { uploads.delete(id); reject(e); }
+  });
+}
+// The prompt an agent gets: the message, then where the attachments are.
+function withPaths(text, paths, items) {
+  const imgs = items.every((a) => a.image);
+  const what = (imgs ? 'image' : 'file') + (paths.length > 1 ? 's' : '');
+  const msg = text || `Take a look at the attached ${what}.`;
+  return `${msg} (attached ${what}: ${paths.join(' ')})`;
+}
+async function sendToAgent(g, text, items) {
+  const paths = [];
+  for (const a of items) paths.push(await uploadAtt(g.host, a.token));
+  await herdr(g.host, 'agent', 'prompt', g.pane, items.length ? withPaths(text, paths, items) : text);
+  for (const a of items) try { N.dropAttachment(a.token); } catch (e) {}
+}
+
 // ------------------------------------------------------------------ routing
 
 const cur = () => ui.stack[ui.stack.length - 1];
@@ -714,13 +777,13 @@ function goBack() {
   return false;
 }
 function setTab(t) {
-  if (t === 'shell') { try { N.showShell(); } catch (e) {} return; }
   ui.tab = t; ui.stack = [{ v: t }]; ui.anim = null;
   if (t === 'activity') unseenNeeds = 0;
   render();
 }
 function openDetail(key) {
   const g = agents.get(key); if (!g) return;
+  clearAtts('steer', true);
   const tab = hasLog(g) ? (g.status === 'blocked' ? 'trace' : 'chat') : 'screen';
   push({ v: 'detail', key, tab });
   loadDetail(g, true);
@@ -753,6 +816,8 @@ function renderNow() {
     morph(el, html, false);
   }
   renderSheet();
+  renderAtts('steer');
+  renderAtts('newprompt');
 }
 
 // Minimal keyed DOM patching: regions marked data-k are replaced only when
@@ -904,7 +969,8 @@ function viewDetail(v) {
     ${tabs.length > 1 ? `<div class="seg" role="tablist" data-k="seg">${tabs.map(([t, l]) => `<button role="tab" data-act="dtab" data-t="${t}" aria-selected="${v.tab === t}">${l}</button>`).join('')}</div>` : ''}
     <div class="scroll" id="dscroll" data-k="dbody-${v.tab}">${body}</div>
     <div class="dock"><div data-k="banner">${banner}</div>
-      <div class="composer" data-k="composer" data-keep><textarea id="steer" rows="1" placeholder="Steer ${esc(k.short === g.kind ? g.kind : k.label)}…" enterkeyhint="send"></textarea>
+      <div class="composer" data-k="composer" data-keep><button class="round plus" data-act="attach" data-target="steer" aria-label="Add photos or files">${I.plus}</button>
+        <div class="cin"><div class="atts" id="atts-steer"></div><textarea id="steer" rows="1" placeholder="Steer ${esc(k.short === g.kind ? g.kind : k.label)}…" enterkeyhint="send"></textarea></div>
         <button class="round" data-act="mic" data-target="steer" aria-label="Dictate">${I.mic}</button>
         <button class="round go" data-act="steer" data-key="${esc(g.key)}" aria-label="Send" hidden>${I.send}</button></div></div>`;
 }
@@ -1117,6 +1183,32 @@ function sheetMenu(s) {
       <button class="danger" data-act="close-agent" data-key="${esc(g.key)}">${I.trash}<span>Close agent<small>Closes its pane on ${esc(g.host)}</small></span></button>
     </div>`;
 }
+// The composer's +: the three ways in, as in the Claude and ChatGPT apps.
+function sheetAttach() {
+  return `<div class="grip"></div><h2>Add to message</h2>
+    <div class="tiles">
+      <button data-act="attach-how" data-how="camera">${I.camera}<span>Camera</span></button>
+      <button data-act="attach-how" data-how="photos">${I.photo}<span>Photos</span></button>
+      <button data-act="attach-how" data-how="files">${I.file}<span>Files</span></button>
+    </div>`;
+}
+// Something shared into the app: pick the agent (or terminal tab) it goes to.
+function sheetShare(s) {
+  const list = sortedAgents().filter((g) => !g.gone);
+  const rows = list.map((g) => `<button data-act="share-agent" data-key="${esc(g.key)}"${g.status === 'blocked' ? ' class="muted"' : ''}><span class="badge">${esc(kindMeta(g.kind).short)}</span>
+      <span>${esc(displayName(g))}<small>${esc(where(g))} · ${g.status === 'blocked' ? 'answer its question first' : esc(STATUS[g.status]?.label || g.status || '')}</small></span></button>`).join('');
+  const tabs = s.tabs.map((t) => `<button data-act="share-tab" data-index="${t.index}">${I.term}<span>${esc(t.title)}<small>${t.host ? 'Terminal tab · files go to ' + esc(t.host) + ', path pasted' : 'Terminal tab · path pasted at the prompt'}</small></span></button>`).join('');
+  const n = s.items.length;
+  return `<div class="grip"></div><h2>Send to…</h2>
+    <div class="meta">${n ? n + (n === 1 ? ' attachment' : ' attachments') : 'Text only'}</div>
+    <div class="body">
+      ${n ? `<div class="atts share">${s.items.map((a) => attHtml(a)).join('')}</div>` : ''}
+      <div class="composer note"><div class="cin"><textarea id="sharenote" rows="1" placeholder="Add a message for the agent (optional)">${esc(s.note)}</textarea></div></div>
+      ${rows ? `<div class="section-label">Agents</div><div class="menu">${rows}</div>` : ''}
+      ${tabs ? `<div class="section-label">Terminal tabs</div><div class="menu">${tabs}</div>` : ''}
+      ${!rows && !tabs ? '<p style="color:var(--muted)">No agents running and no terminal tabs open.</p>' : ''}
+    </div>`;
+}
 function sheetConfirm(s) {
   const g = agents.get(s.key); if (!g) return '';
   return `<div class="grip"></div><h2>Close ${esc(displayName(g))}?</h2>
@@ -1246,23 +1338,34 @@ function sheetKinds(s) {
       <p class="note" style="margin:12px 2px 4px">Installs use mise, the same way Omarchy does, and run in a herdr pane on ${esc(h.name)} named "A-SH installs" so you can watch them there. ★ pins an agent to the top and to the quick picks.</p></div>`;
 }
 
-function closeSheet() { ui.sheet = null; render(); }
+function closeSheet() {
+  const s = ui.sheet;
+  if (s && s.type === 'share' && !s.sent) for (const a of s.items) try { N.dropAttachment(a.token); } catch (e) {}
+  ui.sheet = null; render();
+}
 function renderSheet() {
   let host = $('#sheet-host');
   if (!ui.sheet) { if (host) host.remove(); return; }
   if (!host) { host = document.createElement('div'); host.id = 'sheet-host'; document.body.appendChild(host); host.innerHTML = '<div class="scrim" data-act="close-sheet"></div><div class="sheet" role="dialog"></div>'; }
   const s = ui.sheet;
-  const html = s.type === 'kinds' ? sheetKinds(s) : s.type === 'review' ? sheetReview(s) : s.type === 'menu' ? sheetMenu(s) : s.type === 'confirm' ? sheetConfirm(s) : s.type === 'pane' ? sheetPane(s) : '';
+  const html = s.type === 'kinds' ? sheetKinds(s) : s.type === 'review' ? sheetReview(s) : s.type === 'menu' ? sheetMenu(s) : s.type === 'confirm' ? sheetConfirm(s) : s.type === 'pane' ? sheetPane(s)
+    : s.type === 'attach' ? sheetAttach() : s.type === 'share' ? sheetShare(s) : '';
   const sh = $('.sheet', host);
   if (sh.dataset.html === html) return;
-  const ta = $('#amend', sh); const typed = ta ? ta.value : '';
+  // Re-rendering mustn't lose what is being typed in the sheet.
+  const kept = [...sh.querySelectorAll('textarea[id]')].map((t) => [t.id, t.value, t === document.activeElement]);
   sh.dataset.html = html; sh.innerHTML = html;
-  const ta2 = $('#amend', sh); if (ta2 && typed) { ta2.value = typed; syncSend(ta2); }
+  for (const [id, value, focused] of kept) {
+    const t = document.getElementById(id); if (!t) continue;
+    if (value) { t.value = value; syncSend(t); }
+    if (focused) t.focus();
+  }
 }
 
 // ---- new agent
 
 function newAgent() {
+  clearAtts('newprompt', true);
   const v = { v: 'new', host: [...hosts.values()].find((h) => h.state === 'online')?.name || '', kind: '', folder: '', worktree: false, prompt: '', busy: '' };
   push(v); ui.anim = 'enter-up';
   loadNewOptions(v);
@@ -1310,47 +1413,69 @@ function viewNew(v) {
       <div class="list">${!h.repos ? '<button disabled><span class="path">Finding repos…</span></button>' : folders.slice(0, 10).map((f) => `<button data-act="new-folder" data-path="${esc(f.path)}"><span class="path">${esc(tidyPath(h, f.path))}</span><span class="br">${esc(f.branch === 'detached' ? '' : f.branch)}</span><span class="ck">${f.path === v.folder ? I.check : ''}</span></button>`).join('')}</div>
       <button class="check" role="checkbox" aria-checked="${v.worktree && isGit}" data-act="new-wt" ${isGit ? '' : 'disabled'}><span class="box">${v.worktree && isGit ? I.check : ''}</span>Run in its own git worktree</button>
       ${v.kind !== 'shell' ? `<div class="label">First prompt</div>
-      <div class="prompt-box" data-keep data-k="np"><textarea id="newprompt" placeholder="What should it work on? Tap the mic to dictate."></textarea></div>` : ''}`}
+      <div class="prompt-box" data-keep data-k="np"><div class="atts" id="atts-newprompt"></div><textarea id="newprompt" placeholder="What should it work on? Tap the mic to dictate."></textarea></div>` : ''}`}
     </div></div>
     <div class="sticky-foot" data-k="newfoot">
-      ${v.kind !== 'shell' ? `<button class="round" data-act="mic" data-target="newprompt" aria-label="Dictate">${I.mic}</button>` : ''}
+      ${v.kind !== 'shell' ? `<button class="round" data-act="attach" data-target="newprompt" aria-label="Add photos or files">${I.plus}</button><button class="round" data-act="mic" data-target="newprompt" aria-label="Dictate">${I.mic}</button>` : ''}
       <button class="btn primary" data-act="new-start" ${!h || h.state !== 'online' || v.busy ? 'disabled' : ''}>${esc(v.busy || label)}</button></div>`;
 }
 
 async function startAgent(v) {
   const h = hosts.get(v.host); if (!h) return;
   const prompt = ($('#newprompt')?.value || '').trim();
+  const items = v.kind === 'shell' ? [] : (atts.newprompt || []);
   save('ash.lastKind.v1', v.kind);
   const repo = basename(v.folder);
   const slug = (prompt || v.kind).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'agent';
+  // herdr agent names are unique per computer, and the plain kind ("claude")
+  // is usually taken already, so every start gets a short random suffix.
+  const tag = () => Math.random().toString(16).slice(2, 6);
+  let ws = '';      // the workspace this start created, closed again if it fails
+  let started = false;
   try {
     v.busy = v.worktree ? 'Creating worktree…' : 'Creating workspace…'; render();
     let res;
     if (v.worktree) {
-      const branch = 'a-sh/' + slug + '-' + Math.random().toString(16).slice(2, 6);
+      const branch = 'a-sh/' + slug + '-' + tag();
       res = await herdr(h.name, 'worktree', 'create', '--cwd', v.folder, '--branch', branch, '--label', repo + ' · ' + slug, '--no-focus');
     } else {
       res = await herdr(h.name, 'workspace', 'create', '--cwd', v.folder, '--label', repo, '--no-focus');
     }
     const pane = findPane(res);
     if (!pane) throw new Error('herdr didn\'t return a pane');
+    ws = pane.split(':')[0];
     const key = h.name + '|' + pane;
-    if (v.kind === 'shell') { v.busy = ''; ui.stack.pop(); render(); toast('Shell opened in herdr'); try { N.openTerminal(h.name, pane); } catch (e) {} return; }
+    if (v.kind === 'shell') { started = true; v.busy = ''; ui.stack.pop(); render(); toast('Shell opened in herdr'); try { N.openTerminal(h.name, pane); } catch (e) {} return; }
     if (agentState(h, v.kind)?.state === 'firstrun') {
       v.busy = 'Downloading ' + kindLabel(v.kind) + '…'; render();
       if (!(await installAgent(h.name, v.kind))) throw new Error(kindLabel(v.kind) + ' didn\'t download');
     }
     v.busy = 'Starting ' + (KINDS[v.kind]?.label || v.kind) + '…'; render();
     let blocked = false;
-    try { await herdr(h.name, 'agent', 'start', slug, '--kind', v.kind, '--pane', pane, '--timeout', '45000'); }
-    catch (e) { if (e.code === 'agent_not_ready' || /blocked/.test(e.message)) blocked = true; else throw e; }
+    for (let attempt = 0; ; attempt++) {
+      try { await herdr(h.name, 'agent', 'start', slug + '-' + tag(), '--kind', v.kind, '--pane', pane, '--timeout', '45000'); break; }
+      catch (e) {
+        if (e.code === 'agent_name_taken' && attempt < 3) continue;
+        if (e.code === 'agent_not_ready' || /blocked/.test(e.message)) { blocked = true; break; }
+        throw e;
+      }
+    }
+    started = true;
+    // Wait for the board's next snapshot to carry the agent, then open it.
     kick(h);
-    await sleep(500);
-    for (let i = 0; i < 10 && !agents.get(key); i++) await sleep(300);
+    for (let i = 0; i < 24 && !agents.get(key); i++) { await sleep(250); if (i % 4 === 3) kick(h); }
     const g = agents.get(key) || { key, host: h.name, pane };
-    if (prompt) {
-      if (blocked) pendingPrompt(key, prompt);
-      else await herdr(h.name, 'agent', 'prompt', pane, prompt);
+    let first = prompt;
+    if (items.length) {
+      v.busy = 'Sending attachments…'; render();
+      const paths = [];
+      for (const a of items) paths.push(await uploadAtt(h.name, a.token));
+      first = withPaths(prompt, paths, items);
+      clearAtts('newprompt', true);
+    }
+    if (first) {
+      if (blocked) pendingPrompt(key, first);
+      else await herdr(h.name, 'agent', 'prompt', pane, first);
     }
     v.busy = '';
     ui.stack = [{ v: 'board' }]; ui.tab = 'board';
@@ -1358,6 +1483,8 @@ async function startAgent(v) {
     if (blocked) toast('It needs your OK before starting — tap Review');
   } catch (e) {
     v.busy = ''; render(); toast('Couldn\'t start: ' + e.message);
+    // Leave nothing behind: an empty workspace from a failed start is just clutter in herdr.
+    if (ws && !started) herdr(h.name, 'workspace', 'close', ws).catch(() => {});
   }
 }
 function findPane(o) {
@@ -1427,7 +1554,7 @@ function viewComputers() {
 function syncSend(ta) {
   const box = ta.closest('.composer');
   if (!box) return;
-  const has = ta.value.trim().length > 0;
+  const has = ta.value.trim().length > 0 || (atts[ta.id] || []).length > 0;
   const go = box.querySelector('.round.go'), mic = box.querySelector('[data-act="mic"]');
   if (go) go.hidden = !has;
   if (mic) mic.hidden = has;
@@ -1474,11 +1601,39 @@ document.addEventListener('click', async (e) => {
     case 'esc': { const a = agents.get(ui.sheet.key); closeSheet(); if (a) herdr(a.host, 'agent', 'send-keys', a.pane, 'esc').catch((x) => toast(x.message)); break; }
     case 'amend': { const t = $('#amend').value.trim(); if (t) amend(t); break; }
     case 'steer': {
-      const ta = $('#steer'); const t = ta.value.trim(); if (!t || !g) break;
+      const ta = $('#steer'); const t = ta.value.trim(); const items = atts.steer || [];
+      if ((!t && !items.length) || !g) break;
       if (g.status === 'blocked') { toast('It\'s waiting on a question — answer it first'); reviewSheet(g); break; }
-      ta.value = ''; syncSend(ta);
-      herdr(g.host, 'agent', 'prompt', g.pane, t).then(() => { toast('Sent'); kick(hosts.get(g.host)); setTimeout(() => loadDetail(g, false), 600); })
-        .catch((x) => { ta.value = t; syncSend(ta); toast(x.message); });
+      ta.value = ''; atts.steer = []; renderAtts('steer'); syncSend(ta);
+      if (items.length) toast(items.length > 1 ? `Sending ${items.length} attachments…` : 'Sending attachment…');
+      sendToAgent(g, t, items).then(() => { toast('Sent'); kick(hosts.get(g.host)); setTimeout(() => loadDetail(g, false), 600); })
+        .catch((x) => { ta.value = t; atts.steer = items; renderAtts('steer'); syncSend(ta); toast(x.message); });
+      break;
+    }
+    case 'attach': haptic(); ui.sheet = { type: 'attach', target: el.dataset.target }; render(); break;
+    case 'attach-how': { const target = ui.sheet?.target; closeSheet(); if (target) try { N.attach(target, el.dataset.how); } catch (x) { toast('Attachments aren\'t available'); } break; }
+    case 'att-x': {
+      const target = el.dataset.target, token = el.dataset.token;
+      atts[target] = (atts[target] || []).filter((a) => a.token !== token);
+      try { N.dropAttachment(token); } catch (x) {}
+      renderAtts(target); const ta = document.getElementById(target); if (ta) syncSend(ta);
+      break;
+    }
+    case 'share-agent': {
+      const s = ui.sheet; const a = agents.get(el.dataset.key); if (!s || !a) break;
+      if (a.status === 'blocked') { toast('It\'s waiting on a question — answer it first'); break; }
+      const note = ($('#sharenote')?.value || '').trim();
+      if (!note && !s.items.length) { toast('Nothing to send'); break; }
+      s.sent = true; closeSheet();
+      toast(s.items.length ? 'Sending to ' + displayName(a) + '…' : 'Sending…');
+      sendToAgent(a, note, s.items).then(() => { toast('Sent to ' + displayName(a)); kick(hosts.get(a.host)); openDetail(a.key); })
+        .catch((x) => toast(x.message));
+      break;
+    }
+    case 'share-tab': {
+      const s = ui.sheet; if (!s) break;
+      s.sent = true; closeSheet();
+      try { N.shareToTab(+el.dataset.index, JSON.stringify(s.items.map((a) => a.token))); } catch (x) {}
       break;
     }
     case 'mic': {

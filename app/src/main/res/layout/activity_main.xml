@@ -26,7 +26,7 @@
                 android:orientation="vertical">
 
                 <!-- Top bar: scrolling tab strip plus the terminal's own tools
-                     (prompt jumps, search); home and settings live in the nav bar. -->
+                     (prompt jumps, attach, search); home and settings live in the nav bar. -->
                 <LinearLayout
                     android:id="@+id/main_top_bar"
                     android:layout_width="match_parent"
@@ -76,6 +76,21 @@
                         android:clickable="true"
                         android:focusable="true"
                         android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/attach_button"
+                        android:layout_width="@dimen/icon_button"
+                        android:layout_height="@dimen/icon_button"
+                        android:layout_marginStart="@dimen/space_1"
+                        android:layout_gravity="center_vertical"
+                        android:gravity="center"
+                        android:text="@string/attach_button_icon"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/text_icon_glyph"
+                        android:background="@drawable/bg_chip"
+                        android:contentDescription="@string/attach_button_description"
+                        android:clickable="true"
+                        android:focusable="true" />
 
                     <TextView
                         android:id="@+id/search_button"

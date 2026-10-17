@@ -54,9 +54,12 @@ final class BoardView {
 
     /** What the board asks of the terminal side of MainActivity. */
     interface Host {
-        void boardShowShell();
-        /** New userland tab typing {@code command} at its prompt. */
-        void boardOpenTab(String command);
+        /** New userland tab on computer {@code host}, typing {@code command} at its prompt. */
+        void boardOpenTab(String host, String command);
+        /** The composer's +: pick by camera, photos or files, then hand back the prepared items. */
+        void boardAttach(String how, java.util.function.Consumer<List<Attachments.Item>> done);
+        /** A share sent to terminal tab {@code index}: upload, then paste the paths there. */
+        void boardShareToTab(int index, List<Attachments.Item> items);
         void boardScanQr();
         void boardPastePairing();
         UserlandOptions boardUserlandOptions();
@@ -85,6 +88,16 @@ final class BoardView {
     private boolean visible;
     private boolean loaded;
     private final List<String> queued = new ArrayList<>();
+    /** Link state per computer (connecting | online | offline | error), for uploads. */
+    private final java.util.Map<String, String> linkStates = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Upload chunks awaiting their bridge reply, by request id ("u…"). */
+    private final java.util.Map<String, java.util.concurrent.CompletableFuture<String[]>> uploadReplies =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ExecutorService uploads =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private int uploadSeq;
+    /** Base64 characters per put request: a few PTY buffers, well under any line limit. */
+    private static final int CHUNK_CHARS = 48 * 1024;
 
     BoardView(Activity activity, Host host) {
         this.activity = activity;
@@ -135,11 +148,17 @@ final class BoardView {
         links = new BoardLinks(activity, new BoardLinks.Listener() {
             @Override
             public void onLink(String h, String state, String detail) {
+                linkStates.put(h, state);
                 js("ash.onLink(" + q(h) + "," + q(state) + "," + q(detail) + ")");
             }
 
             @Override
             public void onReply(String h, String id, int status, String b64) {
+                if (id.startsWith("u")) {
+                    java.util.concurrent.CompletableFuture<String[]> f = uploadReplies.remove(id);
+                    if (f != null) f.complete(new String[]{String.valueOf(status), b64});
+                    return;
+                }
                 js("ash.onReply(" + q(h) + "," + q(id) + "," + status + "," + q(b64) + ")");
             }
         });
@@ -203,7 +222,74 @@ final class BoardView {
         js("ash.onDictation(" + q(id) + "," + q(text) + ")");
     }
 
+    /** Things shared into the app: the page asks where they go (an agent or a terminal tab). */
+    void share(List<Attachments.Item> items, JSONArray tabs, String note) {
+        js("ash.share(" + Attachments.json(items) + "," + tabs + "," + q(note) + ")");
+    }
+
+    interface UploadDone {
+        /** On the main thread: the file's path on the computer, or null and why not. */
+        void done(String path, String error);
+    }
+
+    /**
+     * Puts one attachment in {@code ~/.cache/a-sh/inbox} on computer {@code h},
+     * over the board's link to it (bridge verbs put / put-end), waiting a
+     * little for the link if it is still coming up.
+     */
+    void upload(String h, Attachments.Item it, UploadDone cb) {
+        uploads.execute(() -> {
+            String path = null;
+            String error = null;
+            try {
+                for (int i = 0; i < 100 && !"online".equals(linkStates.get(h)); i++) Thread.sleep(200);
+                if (!"online".equals(linkStates.get(h))) throw new IOException(h + " is offline");
+                String all = android.util.Base64.encodeToString(it.data, android.util.Base64.NO_WRAP);
+                int n = Math.max(1, (all.length() + CHUNK_CHARS - 1) / CHUNK_CHARS);
+                for (int i = 0; i < n; i++) {
+                    String part = all.substring(i * CHUNK_CHARS, Math.min(all.length(), (i + 1) * CHUNK_CHARS));
+                    request(h, "x" + part, "put", it.name, String.valueOf(i));
+                }
+                path = request(h, null, "put-end", it.name, String.valueOf(it.data.length)).trim();
+            } catch (IOException e) {
+                error = e.getMessage();
+            } catch (InterruptedException e) {
+                error = "interrupted";
+                Thread.currentThread().interrupt();
+            }
+            final String p = path;
+            final String err = error;
+            main.post(() -> cb.done(p, err));
+        });
+    }
+
+    /** One bridge request from Java; {@code raw} is a pre-encoded last field (put's payload). */
+    private String request(String h, String raw, String... args) throws IOException, InterruptedException {
+        String id = "u" + (++uploadSeq);
+        StringBuilder line = new StringBuilder(id);
+        for (String a : args) {
+            line.append("\tx").append(android.util.Base64.encodeToString(
+                    a.getBytes(java.nio.charset.StandardCharsets.UTF_8), android.util.Base64.NO_WRAP));
+        }
+        if (raw != null) line.append('\t').append(raw);
+        java.util.concurrent.CompletableFuture<String[]> f = new java.util.concurrent.CompletableFuture<>();
+        uploadReplies.put(id, f);
+        links.send(h, line.toString());
+        String[] r;
+        try {
+            r = f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            uploadReplies.remove(id);
+            throw new IOException("upload to " + h + " timed out");
+        }
+        String out = new String(android.util.Base64.decode(r[1], android.util.Base64.DEFAULT),
+                java.nio.charset.StandardCharsets.UTF_8);
+        if (!"0".equals(r[0])) throw new IOException("upload failed: " + out.trim());
+        return out;
+    }
+
     void destroy() {
+        uploads.shutdownNow();
         AppUpdater.removeListener(updates);
         links.stopAll();
         web.destroy();
@@ -341,17 +427,53 @@ final class BoardView {
             } else {
                 cmd = "exec ssh " + h;
             }
-            main.post(() -> host.boardOpenTab(cmd));
+            main.post(() -> host.boardOpenTab(h, cmd));
         }
 
         @JavascriptInterface
         public void openShell(String h) {
-            if (validHost(h)) main.post(() -> host.boardOpenTab("exec ssh " + h + "-sh"));
+            if (validHost(h)) main.post(() -> host.boardOpenTab(h, "exec ssh " + h + "-sh"));
+        }
+
+        /** The composer's + menu picked {@code how}; items come back via ash.onAttached(target, …). */
+        @JavascriptInterface
+        public void attach(String target, String how) {
+            main.post(() -> host.boardAttach(how, items ->
+                    js("ash.onAttached(" + q(target) + "," + Attachments.json(items) + ")")));
+        }
+
+        /** Uploads a held attachment to computer {@code h}; answers via ash.onUploaded(reqId, path, error). */
+        @JavascriptInterface
+        public void upload(String h, String token, String reqId) {
+            Attachments.Item it = Attachments.get(token);
+            main.post(() -> {
+                if (it == null || !validHost(h)) {
+                    js("ash.onUploaded(" + q(reqId) + ",''," + q("attachment is gone") + ")");
+                    return;
+                }
+                BoardView.this.upload(h, it, (path, err) ->
+                        js("ash.onUploaded(" + q(reqId) + "," + q(path) + "," + q(err) + ")"));
+            });
         }
 
         @JavascriptInterface
-        public void showShell() {
-            main.post(host::boardShowShell);
+        public void dropAttachment(String token) {
+            Attachments.drop(token);
+        }
+
+        /** A share's destination was terminal tab {@code index}; tokens is a JSON array. */
+        @JavascriptInterface
+        public void shareToTab(int index, String tokens) {
+            List<Attachments.Item> items = new ArrayList<>();
+            try {
+                JSONArray a = new JSONArray(tokens);
+                for (int i = 0; i < a.length(); i++) {
+                    Attachments.Item it = Attachments.get(a.getString(i));
+                    if (it != null) items.add(it);
+                }
+            } catch (org.json.JSONException ignored) {
+            }
+            main.post(() -> host.boardShareToTab(index, items));
         }
 
         @JavascriptInterface

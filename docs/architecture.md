@@ -614,6 +614,30 @@ the emulator/bash never came up — reopens as a shell rather than `finish()`ing
 activity. The signal is the user-interaction flag, not a timeout, so it
 doesn't misfire on a slow device or a fast quit.
 
+### Navigation and attachments
+
+One native bar (`NavBarView`) sits under every main screen: **Home** (the
+agent board, a WebView over the terminal UI), **Terminal**, **Activity**
+(the board's event log) and **Settings** (its own activity, never
+"current"). It hides while the soft keyboard is up and returns when it
+closes; the insets listener and a layout-pass check both drive that, since
+some window setups consume the insets first. The board page reports its root
+and badge counts over the bridge (`AshNative.nav`) the moment they change, not
+on the next animation frame, which a hidden WebView doesn't get. Back from the
+terminal goes Home; back from Home leaves the app.
+
+Attachments (photos, screenshots, files) come from three places: the **+** on
+the left of every board composer (Camera / Photos / Files), the 📎 in the
+terminal's top bar, and Android's share sheet. `Attachments` prepares them
+(images shrunk to a 2048 px long edge, EXIF rotation applied; the camera
+writes through the app's own `CaptureProvider`) and holds them under a token
+until they are sent. Sending to an agent uploads each file over the board's
+SSH link (bridge verbs `put` / `put-end`, base64 chunks) into
+`~/.cache/a-sh/inbox` on that computer and puts the paths in the prompt; agents
+read them from there. Sending to a terminal tab uploads to the computer the tab
+is on (asked once if unknown) or saves into the phone's own Linux, then pastes
+the paths at the prompt as a bracketed paste.
+
 ## Decisions worth remembering
 
 - **Prebuilt `libghostty-vt.a` is committed.** Building it needs an exact
